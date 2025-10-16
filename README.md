@@ -22,3 +22,5 @@ Quắ trình thực hiện đồ án:
 5.Thiết kế giao diện hệ thống Môi trường cài đặt và công nghệ sử dụng	
 
 -- Hệ cơ sở dữ liệu Microsoft SQL Server Management Studio 20.
+
+-- Visual Studio Code
