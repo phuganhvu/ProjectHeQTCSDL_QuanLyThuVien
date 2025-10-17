@@ -1,1 +1,9 @@
-
+CREATE TABLE Sach(
+	MaSach CHAR(10) PRIMARY KEY,
+	TenSach NVARCHAR(100),
+	TacGia NVARCHAR(100),
+	NhaXuatBan NVARCHAR(100),
+	NamXuatBan DATE,
+	SoLuongTon int,
+	GiaBan DECIMAL(10,2)
+);
