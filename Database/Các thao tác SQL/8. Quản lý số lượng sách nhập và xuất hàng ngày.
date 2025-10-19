@@ -1,0 +1,9 @@
+-- Tạo bảng NhapKho để quản lý các lần nhập hàng
+CREATE TABLE NhapKho (
+    SoPhieuNK CHAR(10) PRIMARY KEY,
+    MaSach CHAR(10) NOT NULL REFERENCES Sach(MaSach), -- Khóa ngoại tới bảng Sách
+    NgayNhap DATE NOT NULL,
+    SoLuongNhap INT NOT NULL CHECK (SoLuongNhap > 0),
+    DonGiaNhap DECIMAL(18, 2), -- Giá nhập vào (để tính giá vốn)
+    NguoiNhap NVARCHAR(100)
+);
