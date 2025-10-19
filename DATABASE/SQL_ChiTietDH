@@ -1,6 +1,8 @@
-CREATE TABLE ChiTietDH(
-	SoDH CHAR(10) FOREIGN KEY(SoDH) REFERENCES DonHang(SoDH)  ON DELETE CASCADE,
-	MaSach CHAR(10) FOREIGN KEY(MaSach) REFERENCES SACH(MaSach) ON UPDATE CASCADE,
-	SoLuong INT,
-	DonGia DECIMAL(10,2)
+-- 4. Tạo Bảng ChiTietDH (Bảng Chi tiết có Khóa ngoại kép)
+CREATE TABLE ChiTietDH (
+    SoDH CHAR(10) REFERENCES DonHang(SoDH),
+    MaSach CHAR(10) REFERENCES Sach(MaSach),
+    SoLuong INT NOT NULL CHECK (SoLuong > 0),
+    DonGia DECIMAL(18, 2) NOT NULL CHECK (DonGia > 0),
+    PRIMARY KEY (SoDH, MaSach) -- Khóa chính kết hợp
 );
