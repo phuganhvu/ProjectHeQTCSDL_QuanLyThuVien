@@ -1,0 +1,7 @@
+SELECT
+    YEAR(NgayDat) AS Nam,
+    MONTH(NgayDat) AS Thang,
+    COUNT(SoDH) AS TongSoDonHang
+FROM DonHang
+GROUP BY ROLLUP (YEAR(NgayDat), MONTH(NgayDat))
+ORDER BY Nam DESC, Thang DESC;
