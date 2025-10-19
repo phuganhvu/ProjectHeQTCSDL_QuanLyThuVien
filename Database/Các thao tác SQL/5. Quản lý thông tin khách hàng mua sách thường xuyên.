@@ -1,0 +1,19 @@
+SELECT TOP 10 -- Lấy 10 khách hàng mua nhiều nhất
+    KH.MaKH,
+    KH.Hoten,
+    KH.Diachi,
+    KH.SDT,
+    COUNT(DISTINCT DH.SoDH) AS TongSoDonHang, -- Tổng số lần đặt hàng
+    SUM(CT.SoLuong) AS TongSoLuongSachDaMua, -- Tổng số lượng sách đã mua
+    SUM(CT.SoLuong * CT.DonGia) AS TongChiTieu
+FROM KhachHang KH
+JOIN DonHang DH ON KH.MaKH = DH.MaKH
+JOIN ChiTietDH CT ON DH.SoDH = CT.SoDH
+GROUP BY 
+    KH.MaKH, 
+    KH.Hoten, 
+    KH.Diachi, 
+    KH.SDT
+ORDER BY 
+    TongSoLuongSachDaMua DESC, -- Tiêu chí chính: Số lượng sách đã mua
+    TongChiTieu DESC;          -- Tiêu chí phụ: Tổng chi tiêu
