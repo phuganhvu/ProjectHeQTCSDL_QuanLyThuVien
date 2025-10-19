@@ -1,0 +1,36 @@
+-- Khai báo các biến đầu vào (Tham số từ API Java của bạn)
+DECLARE @TacGia NVARCHAR(200) = NULL;         -- Ví dụ: N'Nguyễn Nhật Ánh'
+DECLARE @NhaXuatBan NVARCHAR(200) = NULL;     -- Ví dụ: N'NXB Trẻ'
+DECLARE @NamXuatBan INT = NULL;               -- Ví dụ: 2017
+
+-- Đặt giá trị cho biến nếu muốn kiểm tra
+-- SET @TacGia = N'Nguyễn Nhật Ánh';
+-- SET @NhaXuatBan = N'NXB Trẻ';
+-- SET @NamXuatBan = 2017;
+
+SELECT
+    MaSach,
+    TenSach,
+    TacGia,
+    NhaXuatBan,
+    YEAR(NamXuatBan) AS NamXB,
+    SoLuongTon,
+    GiaBan
+FROM
+    Sach
+WHERE
+    -- 1. Tìm kiếm theo Tác giả (Sử dụng LIKE để tìm kiếm gần đúng, không phân biệt hoa thường)
+    (@TacGia IS NULL OR TacGia COLLATE Vietnamese_CI_AI LIKE '%' + @TacGia + '%')
+    
+    -- 2. Tìm kiếm theo Nhà Xuất Bản (Sử dụng LIKE để tìm kiếm gần đúng)
+    AND (@NhaXuatBan IS NULL OR NhaXuatBan COLLATE Vietnamese_CI_AI LIKE '%' + @NhaXuatBan + '%')
+    
+    -- 3. Tìm kiếm theo Năm Xuất Bản (Sử dụng so sánh bằng)
+    AND (@NamXuatBan IS NULL OR YEAR(NamXuatBan) = @NamXuatBan)
+    
+    -- Đảm bảo ít nhất một tiêu chí được nhập (Ngăn không cho trả về tất cả nếu không có tham số nào)
+    -- Nếu bạn muốn cho phép tìm kiếm rỗng (trả về tất cả), hãy bỏ dòng này.
+    AND (@TacGia IS NOT NULL OR @NhaXuatBan IS NOT NULL OR @NamXuatBan IS NOT NULL)
+
+ORDER BY
+    TenSach;
