@@ -1,0 +1,6 @@
+SELECT
+    NhaXuatBan,
+    SUM(SoLuongTon) AS TongSoLuongTonKho
+FROM Sach
+GROUP BY NhaXuatBan
+ORDER BY TongSoLuongTonKho DESC;
