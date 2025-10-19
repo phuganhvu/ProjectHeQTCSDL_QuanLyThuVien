@@ -1,0 +1,9 @@
+SELECT TOP 10
+    KH.Hoten,
+    KH.SDT,
+    SUM(CT.SoLuong) AS TongSoLuongSachDaMua
+FROM KhachHang KH
+JOIN DonHang DH ON KH.MaKH = DH.MaKH
+JOIN ChiTietDH CT ON DH.SoDH = CT.SoDH
+GROUP BY KH.Hoten, KH.SDT
+ORDER BY TongSoLuongSachDaMua DESC;
