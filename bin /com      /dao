@@ -1,1 +1,702 @@
+// Source code is decompiled from a .class file using FernFlower decompiler (from Intellij IDEA).
+package com.nhom9.libraryapp.dao;
 
+
+import com.nhom9.libraryapp.model.Book;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.List;
+
+public class BookDao {
+   public BookDao() {
+   }
+
+   public Book getBookById(int var1) throws SQLException {
+      String var2 = "SELECT * FROM Sach WHERE id_sach = ?";
+      Book var3 = null;
+      Connection var4 = DatabaseConnection.getConnection();
+
+      try {
+         PreparedStatement var5 = var4.prepareStatement(var2);
+
+         try {
+            var5.setInt(1, var1);
+            ResultSet var6 = var5.executeQuery();
+
+            try {
+               if (var6.next()) {
+                  var3 = this.mapResultSetToBook(var6);
+               }
+            } catch (Throwable var12) {
+               if (var6 != null) {
+                  try {
+                     var6.close();
+                  } catch (Throwable var11) {
+                     var12.addSuppressed(var11);
+                  }
+               }
+
+               throw var12;
+            }
+
+            if (var6 != null) {
+               var6.close();
+            }
+         } catch (Throwable var13) {
+            if (var5 != null) {
+               try {
+                  var5.close();
+               } catch (Throwable var10) {
+                  var13.addSuppressed(var10);
+               }
+            }
+
+            throw var13;
+         }
+
+         if (var5 != null) {
+            var5.close();
+         }
+      } catch (Throwable var14) {
+         if (var4 != null) {
+            try {
+               var4.close();
+            } catch (Throwable var9) {
+               var14.addSuppressed(var9);
+            }
+         }
+
+         throw var14;
+      }
+
+      if (var4 != null) {
+         var4.close();
+      }
+
+      return var3;
+   }
+
+   public List<Book> getAllBooks() throws SQLException {
+      String var1 = "SELECT * FROM Sach ORDER BY ten_sach";
+      ArrayList var2 = new ArrayList();
+      Connection var3 = DatabaseConnection.getConnection();
+
+      try {
+         PreparedStatement var4 = var3.prepareStatement(var1);
+
+         try {
+            ResultSet var5 = var4.executeQuery();
+
+            try {
+               while(var5.next()) {
+                  var2.add(this.mapResultSetToBook(var5));
+               }
+            } catch (Throwable var11) {
+               if (var5 != null) {
+                  try {
+                     var5.close();
+                  } catch (Throwable var10) {
+                     var11.addSuppressed(var10);
+                  }
+               }
+
+               throw var11;
+            }
+
+            if (var5 != null) {
+               var5.close();
+            }
+         } catch (Throwable var12) {
+            if (var4 != null) {
+               try {
+                  var4.close();
+               } catch (Throwable var9) {
+                  var12.addSuppressed(var9);
+               }
+            }
+
+            throw var12;
+         }
+
+         if (var4 != null) {
+            var4.close();
+         }
+      } catch (Throwable var13) {
+         if (var3 != null) {
+            try {
+               var3.close();
+            } catch (Throwable var8) {
+               var13.addSuppressed(var8);
+            }
+         }
+
+         throw var13;
+      }
+
+      if (var3 != null) {
+         var3.close();
+      }
+
+      return var2;
+   }
+
+   public List<Book> searchBooks(String var1, String var2, String var3) throws SQLException {
+      StringBuilder var4 = new StringBuilder("SELECT * FROM Sach WHERE 1=1");
+      ArrayList var5 = new ArrayList();
+      if (var1 != null && !var1.trim().isEmpty()) {
+         var4.append(" AND ten_sach LIKE ?");
+         var5.add("%" + var1.trim() + "%");
+      }
+
+      if (var2 != null && !var2.trim().isEmpty()) {
+         var4.append(" AND tac_gia LIKE ?");
+         var5.add("%" + var2.trim() + "%");
+      }
+
+      if (var3 != null && !var3.trim().isEmpty()) {
+         var4.append(" AND the_loai LIKE ?");
+         var5.add("%" + var3.trim() + "%");
+      }
+
+      var4.append(" ORDER BY ten_sach");
+      String var6 = var4.toString();
+      ArrayList var7 = new ArrayList();
+      Connection var8 = DatabaseConnection.getConnection();
+
+      try {
+         PreparedStatement var9 = var8.prepareStatement(var6);
+
+         try {
+            for(int var10 = 0; var10 < var5.size(); ++var10) {
+               var9.setObject(var10 + 1, var5.get(var10));
+            }
+
+            ResultSet var19 = var9.executeQuery();
+
+            try {
+               while(var19.next()) {
+                  var7.add(this.mapResultSetToBook(var19));
+               }
+            } catch (Throwable var16) {
+               if (var19 != null) {
+                  try {
+                     var19.close();
+                  } catch (Throwable var15) {
+                     var16.addSuppressed(var15);
+                  }
+               }
+
+               throw var16;
+            }
+
+            if (var19 != null) {
+               var19.close();
+            }
+         } catch (Throwable var17) {
+            if (var9 != null) {
+               try {
+                  var9.close();
+               } catch (Throwable var14) {
+                  var17.addSuppressed(var14);
+               }
+            }
+
+            throw var17;
+         }
+
+         if (var9 != null) {
+            var9.close();
+         }
+      } catch (Throwable var18) {
+         if (var8 != null) {
+            try {
+               var8.close();
+            } catch (Throwable var13) {
+               var18.addSuppressed(var13);
+            }
+         }
+
+         throw var18;
+      }
+
+      if (var8 != null) {
+         var8.close();
+      }
+
+      return var7;
+   }
+
+   public boolean addBook(Book var1) throws SQLException {
+      String var2 = "INSERT INTO Sach (ten_sach, tac_gia, the_loai, so_luong_tong, so_luong_con_lai) VALUES (?, ?, ?, ?, ?)";
+      boolean var3 = false;
+      Connection var4 = DatabaseConnection.getConnection();
+
+      int var12;
+      try {
+         PreparedStatement var5 = var4.prepareStatement(var2);
+
+         try {
+            var5.setString(1, var1.getTenSach());
+            var5.setString(2, var1.getTacGia());
+            var5.setString(3, var1.getTheLoai());
+            var5.setInt(4, var1.getSoLuongTong());
+            var5.setInt(5, var1.getSoLuongConLai());
+            var12 = var5.executeUpdate();
+         } catch (Throwable var10) {
+            if (var5 != null) {
+               try {
+                  var5.close();
+               } catch (Throwable var9) {
+                  var10.addSuppressed(var9);
+               }
+            }
+
+            throw var10;
+         }
+
+         if (var5 != null) {
+            var5.close();
+         }
+      } catch (Throwable var11) {
+         if (var4 != null) {
+            try {
+               var4.close();
+            } catch (Throwable var8) {
+               var11.addSuppressed(var8);
+            }
+         }
+
+         throw var11;
+      }
+
+      if (var4 != null) {
+         var4.close();
+      }
+
+      return var12 > 0;
+   }
+
+   public boolean updateBook(Book var1) throws SQLException {
+      String var2 = "UPDATE Sach SET ten_sach = ?, tac_gia = ?, the_loai = ?, so_luong_tong = ?, so_luong_con_lai = ? WHERE id_sach = ?";
+      boolean var3 = false;
+      Connection var4 = DatabaseConnection.getConnection();
+
+      int var12;
+      try {
+         PreparedStatement var5 = var4.prepareStatement(var2);
+
+         try {
+            var5.setString(1, var1.getTenSach());
+            var5.setString(2, var1.getTacGia());
+            var5.setString(3, var1.getTheLoai());
+            var5.setInt(4, var1.getSoLuongTong());
+            var5.setInt(5, var1.getSoLuongConLai());
+            var5.setInt(6, var1.getId());
+            var12 = var5.executeUpdate();
+         } catch (Throwable var10) {
+            if (var5 != null) {
+               try {
+                  var5.close();
+               } catch (Throwable var9) {
+                  var10.addSuppressed(var9);
+               }
+            }
+
+            throw var10;
+         }
+
+         if (var5 != null) {
+            var5.close();
+         }
+      } catch (Throwable var11) {
+         if (var4 != null) {
+            try {
+               var4.close();
+            } catch (Throwable var8) {
+               var11.addSuppressed(var8);
+            }
+         }
+
+         throw var11;
+      }
+
+      if (var4 != null) {
+         var4.close();
+      }
+
+      return var12 > 0;
+   }
+
+   public boolean updateBookQuantity(int var1, int var2) throws SQLException {
+      String var3 = "UPDATE Sach SET so_luong_con_lai = so_luong_con_lai + ? WHERE id_sach = ? AND so_luong_con_lai + ? >= 0";
+      boolean var4 = false;
+      Connection var5 = DatabaseConnection.getConnection();
+
+      int var13;
+      try {
+         PreparedStatement var6 = var5.prepareStatement(var3);
+
+         try {
+            var6.setInt(1, var2);
+            var6.setInt(2, var1);
+            var6.setInt(3, var2);
+            var13 = var6.executeUpdate();
+         } catch (Throwable var11) {
+            if (var6 != null) {
+               try {
+                  var6.close();
+               } catch (Throwable var10) {
+                  var11.addSuppressed(var10);
+               }
+            }
+
+            throw var11;
+         }
+
+         if (var6 != null) {
+            var6.close();
+         }
+      } catch (Throwable var12) {
+         if (var5 != null) {
+            try {
+               var5.close();
+            } catch (Throwable var9) {
+               var12.addSuppressed(var9);
+            }
+         }
+
+         throw var12;
+      }
+
+      if (var5 != null) {
+         var5.close();
+      }
+
+      return var13 > 0;
+   }
+
+   public boolean deleteBook(int var1) throws SQLException {
+      String var2 = "DELETE FROM Sach WHERE id_sach = ?";
+      boolean var3 = false;
+      Connection var4 = DatabaseConnection.getConnection();
+
+      int var12;
+      try {
+         PreparedStatement var5 = var4.prepareStatement(var2);
+
+         try {
+            var5.setInt(1, var1);
+            var12 = var5.executeUpdate();
+         } catch (Throwable var10) {
+            if (var5 != null) {
+               try {
+                  var5.close();
+               } catch (Throwable var9) {
+                  var10.addSuppressed(var9);
+               }
+            }
+
+            throw var10;
+         }
+
+         if (var5 != null) {
+            var5.close();
+         }
+      } catch (Throwable var11) {
+         if (var4 != null) {
+            try {
+               var4.close();
+            } catch (Throwable var8) {
+               var11.addSuppressed(var8);
+            }
+         }
+
+         throw var11;
+      }
+
+      if (var4 != null) {
+         var4.close();
+      }
+
+      return var12 > 0;
+   }
+
+   public int getTotalBookCount() throws SQLException {
+      String var1 = "SELECT COUNT(*) FROM Sach";
+      Connection var2 = DatabaseConnection.getConnection();
+
+      int var5;
+      label95: {
+         try {
+            PreparedStatement var3;
+            label97: {
+               var3 = var2.prepareStatement(var1);
+
+               try {
+                  ResultSet var4 = var3.executeQuery();
+
+                  label83: {
+                     try {
+                        if (var4.next()) {
+                           var5 = var4.getInt(1);
+                           break label83;
+                        }
+                     } catch (Throwable var10) {
+                        if (var4 != null) {
+                           try {
+                              var4.close();
+                           } catch (Throwable var9) {
+                              var10.addSuppressed(var9);
+                           }
+                        }
+
+                        throw var10;
+                     }
+
+                     if (var4 != null) {
+                        var4.close();
+                     }
+                     break label97;
+                  }
+
+                  if (var4 != null) {
+                     var4.close();
+                  }
+               } catch (Throwable var11) {
+                  if (var3 != null) {
+                     try {
+                        var3.close();
+                     } catch (Throwable var8) {
+                        var11.addSuppressed(var8);
+                     }
+                  }
+
+                  throw var11;
+               }
+
+               if (var3 != null) {
+                  var3.close();
+               }
+               break label95;
+            }
+
+            if (var3 != null) {
+               var3.close();
+            }
+         } catch (Throwable var12) {
+            if (var2 != null) {
+               try {
+                  var2.close();
+               } catch (Throwable var7) {
+                  var12.addSuppressed(var7);
+               }
+            }
+
+            throw var12;
+         }
+
+         if (var2 != null) {
+            var2.close();
+         }
+
+         return 0;
+      }
+
+      if (var2 != null) {
+         var2.close();
+      }
+
+      return var5;
+   }
+
+   public int getTotalBookCopies() throws SQLException {
+      String var1 = "SELECT SUM(so_luong_tong) FROM Sach";
+      Connection var2 = DatabaseConnection.getConnection();
+
+      int var5;
+      label95: {
+         try {
+            PreparedStatement var3;
+            label97: {
+               var3 = var2.prepareStatement(var1);
+
+               try {
+                  ResultSet var4 = var3.executeQuery();
+
+                  label83: {
+                     try {
+                        if (var4.next()) {
+                           var5 = var4.getInt(1);
+                           break label83;
+                        }
+                     } catch (Throwable var10) {
+                        if (var4 != null) {
+                           try {
+                              var4.close();
+                           } catch (Throwable var9) {
+                              var10.addSuppressed(var9);
+                           }
+                        }
+
+                        throw var10;
+                     }
+
+                     if (var4 != null) {
+                        var4.close();
+                     }
+                     break label97;
+                  }
+
+                  if (var4 != null) {
+                     var4.close();
+                  }
+               } catch (Throwable var11) {
+                  if (var3 != null) {
+                     try {
+                        var3.close();
+                     } catch (Throwable var8) {
+                        var11.addSuppressed(var8);
+                     }
+                  }
+
+                  throw var11;
+               }
+
+               if (var3 != null) {
+                  var3.close();
+               }
+               break label95;
+            }
+
+            if (var3 != null) {
+               var3.close();
+            }
+         } catch (Throwable var12) {
+            if (var2 != null) {
+               try {
+                  var2.close();
+               } catch (Throwable var7) {
+                  var12.addSuppressed(var7);
+               }
+            }
+
+            throw var12;
+         }
+
+         if (var2 != null) {
+            var2.close();
+         }
+
+         return 0;
+      }
+
+      if (var2 != null) {
+         var2.close();
+      }
+
+      return var5;
+   }
+
+   public int getTotalAvailableCopies() throws SQLException {
+      String var1 = "SELECT SUM(so_luong_con_lai) FROM Sach";
+      Connection var2 = DatabaseConnection.getConnection();
+
+      int var5;
+      label95: {
+         try {
+            PreparedStatement var3;
+            label97: {
+               var3 = var2.prepareStatement(var1);
+
+               try {
+                  ResultSet var4 = var3.executeQuery();
+
+                  label83: {
+                     try {
+                        if (var4.next()) {
+                           var5 = var4.getInt(1);
+                           break label83;
+                        }
+                     } catch (Throwable var10) {
+                        if (var4 != null) {
+                           try {
+                              var4.close();
+                           } catch (Throwable var9) {
+                              var10.addSuppressed(var9);
+                           }
+                        }
+
+                        throw var10;
+                     }
+
+                     if (var4 != null) {
+                        var4.close();
+                     }
+                     break label97;
+                  }
+
+                  if (var4 != null) {
+                     var4.close();
+                  }
+               } catch (Throwable var11) {
+                  if (var3 != null) {
+                     try {
+                        var3.close();
+                     } catch (Throwable var8) {
+                        var11.addSuppressed(var8);
+                     }
+                  }
+
+                  throw var11;
+               }
+
+               if (var3 != null) {
+                  var3.close();
+               }
+               break label95;
+            }
+
+            if (var3 != null) {
+               var3.close();
+            }
+         } catch (Throwable var12) {
+            if (var2 != null) {
+               try {
+                  var2.close();
+               } catch (Throwable var7) {
+                  var12.addSuppressed(var7);
+               }
+            }
+
+            throw var12;
+         }
+
+         if (var2 != null) {
+            var2.close();
+         }
+
+         return 0;
+      }
+
+      if (var2 != null) {
+         var2.close();
+      }
+
+      return var5;
+   }
+
+   private Book mapResultSetToBook(ResultSet var1) throws SQLException {
+      Book var2 = new Book();
+      var2.setId(var1.getInt("id_sach"));
+      var2.setTenSach(var1.getString("ten_sach"));
+      var2.setTacGia(var1.getString("tac_gia"));
+      var2.setTheLoai(var1.getString("the_loai"));
+      var2.setSoLuongTong(var1.getInt("so_luong_tong"));
+      var2.setSoLuongConLai(var1.getInt("so_luong_con_lai"));
+      var2.setNgayNhap(var1.getTimestamp("ngay_nhap"));
+      return var2;
+   }
+}
