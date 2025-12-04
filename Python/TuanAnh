@@ -1,0 +1,286 @@
+import mysql.connector
+
+def get_connection():
+    """Kết nối MySQL"""
+    return mysql.connector.connect(
+        host="localhost",
+        user="root",        # user MySQL của bạn
+        password="123456789",  # mật khẩu (nếu có)
+        database="ChiTieuDB"
+    )
+
+def init_database():
+    """Tạo bảng người dùng (Users) nếu chưa có"""
+    conn = None
+    try:
+        conn = get_connection()
+        with conn.cursor() as cur:
+            # Bảng Users
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS Users (
+                    UserID INT AUTO_INCREMENT PRIMARY KEY,
+                    Username VARCHAR(50) UNIQUE NOT NULL,
+                    Password VARCHAR(255) NOT NULL
+                )
+            """)
+            # Tạo bảng ChiTieu nếu chưa có
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS ChiTieu (
+                    ID INT AUTO_INCREMENT PRIMARY KEY,
+                    Ngay DATE NOT NULL,
+                    Danh_muc VARCHAR(50),
+                    So_tien DECIMAL(15,2),
+                    Ghi_chu TEXT,
+                    UserID INT
+                )
+            """)
+            # Kiểm tra ChiTieu có UserID chưa
+            cur.execute("SHOW COLUMNS FROM ChiTieu LIKE 'UserID'")
+            if not cur.fetchone():
+                cur.execute("ALTER TABLE ChiTieu ADD COLUMN UserID INT")
+        conn.commit()
+    except Exception as e:
+        print("Loi khoi tao database:", e)
+    finally:
+        if conn:
+            conn.close()
+
+def check_login(username, password):
+    """Kiểm tra đăng nhập"""
+    conn = None
+    try:
+        conn = get_connection()
+        with conn.cursor() as cur:
+            cur.execute("SELECT UserID, Password FROM Users WHERE Username = %s", (username,))
+            result = cur.fetchone()
+        if result and result[1] == password:
+            return result[0]
+        return None
+    except Exception as e:
+        print("Loi dang nhap:", e)
+        return None
+    finally:
+        if conn:
+            conn.close()
+
+def register_user(username, password):
+    """Đăng ký người dùng mới"""
+    conn = None
+    try:
+        conn = get_connection()
+        with conn.cursor() as cur:
+            cur.execute("SELECT 1 FROM Users WHERE Username = %s", (username,))
+            if cur.fetchone():
+                return False  # Tên đã tồn tại
+            cur.execute("INSERT INTO Users (Username, Password) VALUES (%s, %s)", (username, password))
+        conn.commit()
+        return True
+    except Exception as e:
+        print("Loi dang ky:", e)
+        return False
+    finally:
+        if conn:
+            conn.close()
+
+def get_username(user_id):
+    """Lấy tên người dùng từ UserID"""
+    conn = None
+    try:
+        conn = get_connection()
+        with conn.cursor() as cur:
+            cur.execute("SELECT Username FROM Users WHERE UserID = %s", (user_id,))
+            result = cur.fetchone()
+        return result[0] if result else None
+    except Exception as e:
+        print("Loi lay ten nguoi dung:", e)
+        return None
+    finally:
+        if conn:
+            conn.close()
+
+def get_all_users():
+    """Lấy danh sách tất cả user"""
+    conn = None
+    try:
+        conn = get_connection()
+        with conn.cursor() as cur:
+            cur.execute("SELECT UserID, Username, Password FROM Users ORDER BY UserID")
+            return cur.fetchall()
+    except Exception as e:
+        print("Loi lay danh sach user:", e)
+        return []
+    finally:
+        if conn:
+            conn.close()
+
+def delete_user(user_id):
+    """Xóa người dùng (không xóa admin)"""
+    conn = None
+    try:
+        conn = get_connection()
+        with conn.cursor() as cur:
+            cur.execute("SELECT Username FROM Users WHERE UserID = %s", (user_id,))
+            result = cur.fetchone()
+            if result and result[0] == "admin":
+                return False
+            cur.execute("DELETE FROM ChiTieu WHERE UserID = %s", (user_id,))
+            cur.execute("DELETE FROM Users WHERE UserID = %s", (user_id,))
+        conn.commit()
+        return True
+    except Exception as e:
+        print("Loi xoa user:", e)
+        return False
+    finally:
+        if conn:
+            conn.close()
+
+
+
+
+
+def ai_canh_bao_bat_thuong():
+    """Phát hiện chi tiêu bất thường so với thói quen"""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+
+        # Lấy chi tiêu 6 tháng gần nhất theo danh mục
+        cursor.execute("""
+            SELECT YEAR(Ngay) as nam, MONTH(Ngay) as thang, 
+                   Danh_muc, SUM(So_tien) as tong_thang
+            FROM ChiTieu 
+            WHERE UserID = %s 
+            GROUP BY YEAR(Ngay), MONTH(Ngay), Danh_muc
+            ORDER BY nam DESC, thang DESC
+            LIMIT 30  # Lấy nhiều hơn để phân tích
+        """, (current_user_id,))
+
+        all_data = cursor.fetchall()
+        conn.close()
+
+        if len(all_data) < 3:
+            return "📊 Cần thêm dữ liệu chi tiêu để phân tích cảnh báo!"
+
+        # Nhóm dữ liệu theo danh mục
+        from collections import defaultdict
+        category_data = defaultdict(list)
+
+        for nam, thang, danh_muc, tong_thang in all_data:
+            category_data[danh_muc].append((nam, thang, float(tong_thang)))
+
+        # Phân tích bất thường cho từng danh mục
+        warnings = []
+
+        for category, data in category_data.items():
+            if len(data) < 2:  # Cần ít nhất 2 tháng để so sánh
+                continue
+
+            current_month = data[0]  # Tháng gần nhất
+            previous_months = data[1:]  # Các tháng trước
+
+            # Tính trung bình các tháng trước (loại bỏ giá trị ngoại lai)
+            amounts = [amount for _, _, amount in previous_months]
+            if not amounts:
+                continue
+
+            avg_previous = sum(amounts) / len(amounts)
+            current_amount = current_month[2]
+
+            # Ngưỡng cảnh báo: tăng 100% so với trung bình
+            if current_amount > avg_previous * 2.0 and current_amount > 500000:  # Trên 500k và tăng 100%
+                increase_pct = ((current_amount - avg_previous) / avg_previous) * 100
+                warnings.append({
+                    'category': category,
+                    'current': current_amount,
+                    'average': avg_previous,
+                    'increase': increase_pct,
+                    'month': f"{current_month[1]:02d}/{current_month[0]}"
+                })
+
+        # Tạo cửa sổ cảnh báo
+        warning_window = tk.Toplevel(root)
+        warning_window.title("🚨 Cảnh Báo Chi Tiêu Bất Thường")
+        warning_window.geometry("700x500")
+        warning_window.configure(bg="#FFF0F0")
+        warning_window.transient(root)
+        warning_window.grab_set()
+
+        # Căn giữa
+        warning_window.update_idletasks()
+        x = (warning_window.winfo_screenwidth() // 2) - (700 // 2)
+        y = (warning_window.winfo_screenheight() // 2) - (500 // 2)
+        warning_window.geometry(f"700x500+{x}+{y}")
+
+        # Header
+        header_frame = tk.Frame(warning_window, bg="#FF6B6B", height=80)
+        header_frame.pack(fill=tk.X)
+        header_frame.pack_propagate(False)
+
+        tk.Label(header_frame, text="🚨 CẢNH BÁO CHI TIÊU BẤT THƯỜNG",
+                 font=("Segoe UI", 18, "bold"), bg="#FF6B6B", fg="white").pack(pady=20)
+
+        # Nội dung cảnh báo
+        content_frame = tk.Frame(warning_window, bg="#FFF0F0", padx=20, pady=20)
+        content_frame.pack(fill=tk.BOTH, expand=True)
+
+        if warnings:
+            # Sắp xếp theo mức độ tăng
+            warnings.sort(key=lambda x: x['increase'], reverse=True)
+
+            for i, warning in enumerate(warnings):
+                warning_frame = tk.Frame(content_frame, bg="#FFE0E0", relief=tk.RAISED, bd=1, pady=10)
+                warning_frame.pack(fill=tk.X, pady=5)
+
+                # Icon cảnh báo
+                tk.Label(warning_frame, text="⚠️", font=("Arial", 16),
+                         bg="#FFE0E0").pack(side=tk.LEFT, padx=10)
+
+                # Thông tin cảnh báo
+                info_frame = tk.Frame(warning_frame, bg="#FFE0E0")
+                info_frame.pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+                tk.Label(info_frame,
+                         text=f"Chi tiêu {warning['category']} tháng {warning['month']}",
+                         font=("Segoe UI", 12, "bold"), bg="#FFE0E0", fg="#D63031").pack(anchor="w")
+
+                tk.Label(info_frame,
+                         text=f"Tăng {warning['increase']:.0f}% so với trung bình",
+                         font=("Segoe UI", 10), bg="#FFE0E0", fg="#E17055").pack(anchor="w")
+
+                tk.Label(info_frame,
+                         text=f"Hiện tại: {format_currency(warning['current'])} | Trung bình: {format_currency(warning['average'])}",
+                         font=("Segoe UI", 9), bg="#FFE0E0", fg="#666666").pack(anchor="w")
+
+            # Lời khuyên
+            advice_frame = tk.Frame(content_frame, bg="#FFF0F0", pady=20)
+            advice_frame.pack(fill=tk.X)
+
+            advice_text = """💡 **LỜI KHUYÊN:**
+• Kiểm tra lại chi tiêu cho các danh mục trên
+• Xem xét cắt giảm nếu không thực sự cần thiết  
+• Thiết lập ngân sách cho từng danh mục"""
+
+            tk.Label(advice_frame, text=advice_text, font=FONT_NORMAL,
+                     bg="#FFF0F0", fg="#2D3436", justify=tk.LEFT).pack(anchor="w")
+
+        else:
+            # Không có cảnh báo
+            success_frame = tk.Frame(content_frame, bg="#E8F5E8", relief=tk.RAISED, bd=1, pady=30)
+            success_frame.pack(fill=tk.BOTH, expand=True)
+
+            tk.Label(success_frame, text="✅", font=("Arial", 48),
+                     bg="#E8F5E8", fg="#27AE60").pack(pady=10)
+            tk.Label(success_frame, text="KHÔNG CÓ CẢNH BÁO NÀO",
+                     font=("Segoe UI", 16, "bold"), bg="#E8F5E8", fg="#27AE60").pack()
+            tk.Label(success_frame, text="Chi tiêu của bạn đang trong tầm kiểm soát!",
+                     font=FONT_NORMAL, bg="#E8F5E8", fg="#666666").pack(pady=10)
+
+        # Nút đóng
+        btn_close = tk.Button(warning_window, text="Đóng",
+                              command=warning_window.destroy,
+                              bg="#4FC3A1", fg="white", font=FONT_SUBTITLE,
+                              relief=tk.FLAT, padx=30, pady=10)
+        btn_close.pack(pady=20)
+
+    except Exception as e:
+        messagebox.showerror("Lỗi", f"Không thể phân tích cảnh báo: {str(e)}")
