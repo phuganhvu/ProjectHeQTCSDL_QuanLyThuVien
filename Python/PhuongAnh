@@ -1,4 +1,31 @@
 
+def ve_bieu_do():
+    """Hiển thị menu chọn loại biểu đồ"""
+    choice_window = tk.Toplevel(root)
+    choice_window.title("Chọn loại biểu đồ")
+    choice_window.geometry("400x200")
+    choice_window.transient(root)
+    choice_window.grab_set()
+    choice_window.resizable(False, False)
+
+    # Căn giữa cửa sổ
+    choice_window.update_idletasks()
+    x = (choice_window.winfo_screenwidth() // 2) - (400 // 2)
+    y = (choice_window.winfo_screenheight() // 2) - (200 // 2)
+    choice_window.geometry(f"400x200+{x}+{y}")
+
+    frame = tk.Frame(choice_window, padx=20, pady=20)
+    frame.pack(fill=tk.BOTH, expand=True)
+
+    tk.Label(frame, text="Chọn loại biểu đồ:", font=("Arial", 12, "bold")).pack(pady=(0, 20))
+
+    tk.Button(frame, text="Biểu đồ tròn (Tổng theo danh mục)",
+              command=lambda: [choice_window.destroy(), ve_bieu_do_tron()],
+              width=40, height=2).pack(pady=5)
+
+    tk.Button(frame, text="Biểu đồ cột và đường (Xu hướng theo tháng)",
+              command=lambda: [choice_window.destroy(), ve_bieu_do_xu_huong()],
+              width=40, height=2).pack(pady=5)
 
 
 def ve_bieu_do_tron():
@@ -25,9 +52,8 @@ def ve_bieu_do_tron():
     plt.pie(tong_tien, labels=danh_mucs, autopct='%1.1f%%')
     plt.title("Biểu đồ chi tiêu theo danh mục")
 
-    # THÊM DÒNG NÀY: Đảm bảo cửa sổ matplotlib hiển thị trên cùng
     plt.gcf().canvas.manager.window.attributes('-topmost', 1)
-    plt.gcf().canvas.manager.window.attributes('-topmost', 0)  # Reset sau khi focus
+    plt.gcf().canvas.manager.window.attributes('-topmost', 0)
     plt.show()
 
 def ve_bieu_do_xu_huong():
@@ -90,7 +116,6 @@ def ve_bieu_do_col_line(danh_muc=None):
         cursor = conn.cursor()
 
         if danh_muc:
-            # Lấy dữ liệu theo tháng cho danh mục cụ thể
             query = """
                 SELECT YEAR(Ngay) as Nam, MONTH(Ngay) as Thang, SUM(So_tien) as Tong_tien
                 FROM ChiTieu 
@@ -101,7 +126,6 @@ def ve_bieu_do_col_line(danh_muc=None):
             cursor.execute(query, (current_user_id, danh_muc))
             title = f"Xu hướng chi tiêu - {danh_muc}"
         else:
-            # Lấy dữ liệu theo tháng cho tất cả danh mục
             query = """
                 SELECT YEAR(Ngay) as Nam, MONTH(Ngay) as Thang, Danh_muc, SUM(So_tien) as Tong_tien
                 FROM ChiTieu 
@@ -119,27 +143,39 @@ def ve_bieu_do_col_line(danh_muc=None):
             messagebox.showinfo("Thông báo", "Chưa có dữ liệu để hiển thị biểu đồ.")
             return
 
-        # Xử lý dữ liệu
+        # Tạo cửa sổ Tkinter mới cho biểu đồ
+        chart_window = tk.Toplevel(root)
+        chart_window.title(title)
+        chart_window.geometry("900x700")
+        chart_window.transient(root)
+        chart_window.grab_set()
+
+        # Đảm bảo cửa sổ hiển thị trên cùng
+        chart_window.attributes('-topmost', 1)
+        chart_window.focus_force()
+
+        # Tạo frame chứa biểu đồ
+        frame = tk.Frame(chart_window)
+        frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+        # Tạo Figure và đưa vào Tkinter
+        from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
+
         if danh_muc:
-            # Dữ liệu cho một danh mục
+            fig, ax = plt.subplots(figsize=(10, 6))
+
+            # Xử lý dữ liệu
             thang_nam = [f"{int(row[1]):02d}/{int(row[0])}" for row in data]
             tong_tien = [float(row[2]) for row in data]
 
-            fig, ax = plt.subplots(figsize=(12, 6))
-
             # Biểu đồ cột
             bars = ax.bar(thang_nam, tong_tien, color='steelblue', alpha=0.7, label='Chi tiêu')
-
-            # Biểu đồ đường
             ax.plot(thang_nam, tong_tien, color='red', marker='o', linewidth=2, markersize=8, label='Xu hướng')
-
             ax.set_xlabel('Tháng/Năm', fontsize=10)
             ax.set_ylabel('Số tiền (VNĐ)', fontsize=10)
             ax.set_title(title, fontsize=14, fontweight='bold')
             ax.legend()
             ax.grid(True, alpha=0.3)
-
-            # Xoay nhãn trục x để dễ đọc
             plt.xticks(rotation=45, ha='right')
 
             # Thêm giá trị trên cột
@@ -149,11 +185,10 @@ def ve_bieu_do_col_line(danh_muc=None):
                         f'{height:,.0f}',
                         ha='center', va='bottom', fontsize=8)
 
-            plt.tight_layout()
-
         else:
-            # Dữ liệu cho nhiều danh mục
-            # Tổ chức dữ liệu theo tháng/năm và danh mục
+            fig, ax = plt.subplots(figsize=(12, 7))
+
+            # Xử lý dữ liệu nhiều danh mục
             data_dict = {}
             all_months = set()
 
@@ -166,35 +201,27 @@ def ve_bieu_do_col_line(danh_muc=None):
                     data_dict[danh_muc_item] = {}
                 data_dict[danh_muc_item][month_key] = float(tong_tien)
 
-            # Sắp xếp tháng (theo năm và tháng)
+            # Sắp xếp tháng
             def sort_key(month_str):
                 parts = month_str.split('/')
-                return (int(parts[1]), int(parts[0]))  # (năm, tháng)
+                return (int(parts[1]), int(parts[0]))
 
             sorted_months = sorted(all_months, key=sort_key)
 
-            # Tạo biểu đồ
-            fig, ax = plt.subplots(figsize=(14, 7))
-
-            # Màu sắc cho các danh mục
+            # Vẽ biểu đồ
             colors = plt.cm.tab10(range(len(data_dict)))
-
             x = range(len(sorted_months))
-            width = 0.8 / len(data_dict)  # Độ rộng cột
+            width = 0.8 / len(data_dict)
 
-            # Vẽ biểu đồ cột cho từng danh mục (không hiển thị trong legend)
             for idx, (danh_muc_item, color) in enumerate(zip(data_dict.keys(), colors)):
                 values = [data_dict[danh_muc_item].get(month, 0) for month in sorted_months]
                 offset = (idx - len(data_dict) / 2 + 0.5) * width
-                bars = ax.bar([i + offset for i in x], values, width,
-                              color=color, alpha=0.7)
+                ax.bar([i + offset for i in x], values, width, color=color, alpha=0.7)
 
-            # Vẽ biểu đồ đường cho từng danh mục (xu hướng của từng danh mục)
             for idx, (danh_muc_item, color) in enumerate(zip(data_dict.keys(), colors)):
                 values = [data_dict[danh_muc_item].get(month, 0) for month in sorted_months]
                 ax.plot(x, values, color=color, marker='o', linewidth=2,
-                        markersize=6, label=danh_muc_item,
-                        linestyle='--', zorder=5, alpha=0.8)
+                        markersize=6, label=danh_muc_item, linestyle='--')
 
             ax.set_xlabel('Tháng/Năm', fontsize=10)
             ax.set_ylabel('Số tiền (VNĐ)', fontsize=10)
@@ -204,31 +231,126 @@ def ve_bieu_do_col_line(danh_muc=None):
             ax.legend(loc='upper left')
             ax.grid(True, alpha=0.3)
 
-            plt.tight_layout()
+        plt.tight_layout()
 
-        # THÊM ĐOẠN CODE NÀY: Đảm bảo cửa sổ matplotlib hiển thị trên cùng
-        plt.gcf().canvas.manager.window.attributes('-topmost', 1)
-        plt.gcf().canvas.manager.window.attributes('-topmost', 0)  # Reset sau khi focus
-        plt.show()
+        # Embed vào Tkinter
+        canvas = FigureCanvasTkAgg(fig, master=frame)
+        canvas.draw()
+        canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+
+        # Thêm toolbar (có nút đóng trên toolbar rồi)
+        toolbar = NavigationToolbar2Tk(canvas, frame)
+        toolbar.update()
+        canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+
+        # Reset topmost sau khi hiển thị
+        chart_window.attributes('-topmost', 0)
 
     except Exception as e:
         messagebox.showerror("Lỗi DB", f"Có lỗi khi lấy dữ liệu biểu đồ:\n{e}")
-        import traceback
-        traceback.print_exc()
-
-def select_category(category, category_buttons):
-    """Xử lý khi chọn danh mục chi tiêu"""
-    global selected_category
-    selected_category = category  # Lưu lại danh mục đã chọn
-
-    # Đặt lại màu cho tất cả nút
-    for cat, btn in category_buttons.items():
-        btn.configure(bg=CATEGORY_COLORS.get(cat, "#FFFFFF"), fg="#333333", relief=tk.RAISED)
-
-    # Tô sáng nút được chọn
-    category_buttons[category].configure(bg="#4FC3A1", fg="white", relief=tk.SUNKEN)
 
 
+
+
+
+def show_view_expense_window():
+    """Hiển thị cửa sổ xem chi tiêu riêng biệt"""
+    global tree, filter_ngay, filter_thang, filter_nam
+
+    view_window = tk.Toplevel(root)
+    view_window.title("Xem chi tiêu")
+    view_window.geometry("1000x600")
+    view_window.configure(bg="#F5F5F5")
+    view_window.transient(root)
+    view_window.grab_set()
+
+    # Căn giữa cửa sổ
+    view_window.update_idletasks()
+    x = (view_window.winfo_screenwidth() // 2) - (1000 // 2)
+    y = (view_window.winfo_screenheight() // 2) - (600 // 2)
+    view_window.geometry(f"1000x600+{x}+{y}")
+
+    # Tiêu đề
+    tk.Label(view_window, text="📊 XEM CHI TIÊU", font=FONT_TITLE, bg="#F5F5F5", fg="#333333").pack(pady=(20, 20))
+
+    # Frame chính
+    main_frame = tk.Frame(view_window, bg="#F5F5F5")
+    main_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
+
+    # Frame lọc
+    frame_filter = tk.LabelFrame(main_frame, text="Lọc dữ liệu", font=FONT_SUBTITLE, bg="#FFFFFF",
+                                 fg="#333333", padx=15, pady=10)
+    frame_filter.pack(fill=tk.X, pady=(0, 15))
+
+    tk.Label(frame_filter, text="Ngày:", font=FONT_NORMAL, bg="#FFFFFF").grid(row=0, column=0, padx=5)
+    filter_ngay = DateEntry(frame_filter, date_pattern='yyyy-mm-dd', font=FONT_SMALL)
+    filter_ngay.grid(row=0, column=1, padx=5)
+    tk.Button(frame_filter, text="Lọc theo ngày",
+              command=lambda: hien_thi_du_lieu(filter_ngay.get_date().strftime("%Y-%m-%d")),
+              font=FONT_SMALL, bg="#B0E0E6", fg="#FFFFFF", relief=tk.FLAT).grid(row=0, column=2, padx=5)
+
+    tk.Label(frame_filter, text="Tháng:", font=FONT_NORMAL, bg="#FFFFFF").grid(row=0, column=3, padx=5)
+    filter_thang = ttk.Combobox(frame_filter, values=list(range(1, 13)), width=5, state="readonly",
+                                font=FONT_SMALL)
+    filter_thang.grid(row=0, column=4)
+    filter_thang.set(datetime.now().month)
+
+    tk.Label(frame_filter, text="Năm:", font=FONT_NORMAL, bg="#FFFFFF").grid(row=0, column=5, padx=5)
+    filter_nam = ttk.Combobox(frame_filter, values=list(range(2020, datetime.now().year + 1)), width=7,
+                              state="readonly", font=FONT_SMALL)
+    filter_nam.grid(row=0, column=6)
+    filter_nam.set(datetime.now().year)
+
+    tk.Button(frame_filter, text="Lọc theo tháng",
+              command=lambda: hien_thi_du_lieu(None, int(filter_thang.get()), int(filter_nam.get())),
+              font=FONT_SMALL, bg="#DDA0DD", fg="#FFFFFF", relief=tk.FLAT).grid(row=0, column=7, padx=5)
+    tk.Button(frame_filter, text="Lọc theo năm",
+              command=lambda: hien_thi_du_lieu(None, None, int(filter_nam.get())),
+              font=FONT_SMALL, bg="#F0E68C", fg="#333333", relief=tk.FLAT).grid(row=0, column=8, padx=5)
+    tk.Button(frame_filter, text="Hiển thị tất cả", command=hien_thi_du_lieu,
+              font=FONT_SMALL, bg="#98D8C8", fg="#FFFFFF", relief=tk.FLAT).grid(row=0, column=9, padx=5)
+
+    # Bảng hiển thị
+    frame_table = tk.Frame(main_frame, bg="#FFFFFF")
+    frame_table.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
+
+    tree = ttk.Treeview(frame_table, columns=("ID", "Ngày", "Danh mục", "Số tiền", "Ghi chú"), show="headings")
+    tree.heading("ID", text="ID")
+    tree.heading("Ngày", text="Ngày")
+    tree.heading("Danh mục", text="Danh mục")
+    tree.heading("Số tiền", text="Số tiền")
+    tree.heading("Ghi chú", text="Ghi chú")
+    tree.column("ID", width=50, anchor="center")
+    tree.column("Ngày", width=120, anchor="center")
+    tree.column("Danh mục", width=120)
+    tree.column("Số tiền", width=150, anchor="e")
+    tree.column("Ghi chú", width=300)
+    tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+    scrollbar = ttk.Scrollbar(frame_table, orient=tk.VERTICAL, command=tree.yview)
+    tree.configure(yscrollcommand=scrollbar.set)
+    scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+    # Nút chức năng
+    btn_frame = tk.Frame(main_frame, bg="#F5F5F5")
+    btn_frame.pack(fill=tk.X)
+
+    # Frame chứa 2 nút
+    button_container = tk.Frame(btn_frame, bg="#F5F5F5")
+    button_container.pack(pady=10)
+
+    # Nút sửa
+    btn_edit = tk.Button(button_container, text="✏️ Sửa chi tiêu đã chọn", command=sua_chi_tieu,
+                         font=FONT_SUBTITLE, bg="#4FC3A1", fg="#FFFFFF", relief=tk.FLAT, padx=20, pady=10)
+    btn_edit.pack(side=tk.LEFT, padx=10)
+
+    # Nút xóa
+    btn_delete = tk.Button(button_container, text="🗑️ Xóa chi tiêu đã chọn", command=xoa_chi_tieu,
+                           font=FONT_SUBTITLE, bg="#FFB6C1", fg="#FFFFFF", relief=tk.FLAT, padx=20, pady=10)
+    btn_delete.pack(side=tk.LEFT, padx=10)
+
+    # Hiển thị dữ liệu ban đầu
+    hien_thi_du_lieu()
 
 def show_chart_window():
     """Hiển thị cửa sổ biểu đồ riêng biệt"""
@@ -260,7 +382,6 @@ def show_chart_window():
 
     btn2 = create_rounded_button(btn_frame, "📈 Biểu đồ xu hướng", ve_bieu_do_xu_huong, "#DDA0DD", "#FFFFFF", 25, 2)
     btn2.pack(pady=10, fill=tk.X)
-
 def get_total_expenses():
     """Lấy tổng chi tiêu của user hiện tại"""
     try:
