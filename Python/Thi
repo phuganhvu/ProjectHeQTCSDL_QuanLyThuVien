@@ -1,5 +1,9 @@
 import tkinter as tk
+from sklearn.linear_model import LinearRegression
 from tkinter import messagebox, ttk
+import pandas as pd
+from sklearn.cluster import KMeans
+from sklearn.preprocessing import StandardScaler
 from database import get_connection, init_database, check_login, register_user, get_all_users, delete_user
 import matplotlib.pyplot as plt
 from tkcalendar import DateEntry
@@ -108,15 +112,15 @@ def show_login():
         if password_visible.get():
             # Ẩn mật khẩu
             entry_password.config(show="•")
-            btn_show_password.config(text="👁")
+            btn_show_password.config(text="😎")
         else:
             # Hiển thị mật khẩu
             entry_password.config(show="")
-            btn_show_password.config(text="🙈")
+            btn_show_password.config(text="😵")
         password_visible.set(not password_visible.get())
 
     # Nút hiển thị mật khẩu
-    btn_show_password = tk.Button(password_frame, text="👁", command=toggle_password,
+    btn_show_password = tk.Button(password_frame, text="😎", command=toggle_password,
                                   font=("Segoe UI", 11), bg="#E0E0E0", fg="#555555",
                                   relief=tk.FLAT, width=2, height=1,
                                   activebackground="#D0D0D0", activeforeground="#333333")
@@ -197,9 +201,6 @@ def show_login():
 
 
 
-
-
-
 def show_home_page():
     """Hiển thị trang chủ với 3 nút chức năng chính"""
     # Kiểm tra nếu là admin thì hiển thị giao diện quản lý users
@@ -221,7 +222,7 @@ def show_home_page():
     header_frame.pack(fill=tk.X, padx=0, pady=0)
     header_frame.pack_propagate(False)
 
-    # Avatar (vòng tròn đơn giản)
+    # Avatar
     avatar_frame = tk.Frame(header_frame, bg="#FFFFFF")
     avatar_frame.pack(side=tk.LEFT, padx=30, pady=20)
 
@@ -275,7 +276,6 @@ def show_home_page():
     buttons_frame = tk.Frame(root, bg="#F5F5F5")
     buttons_frame.pack(fill=tk.BOTH, expand=True, padx=50, pady=30)
 
-    # Tạo hàm helper để tạo nút đẹp
     def create_feature_button(parent, text, command, color):
         btn = tk.Button(
             parent,
@@ -307,7 +307,7 @@ def show_home_page():
                                       show_chart_window, "#FFB6C1")
     btn_chart.pack(pady=10, fill=tk.X)
 
-    # AI Buttons Frame
+    # 2 NÚT
     ai_frame = tk.Frame(buttons_frame, bg="#F5F5F5")
     ai_frame.pack(fill=tk.X, pady=10)
 
@@ -318,18 +318,17 @@ def show_home_page():
     btn_warning.pack(side=tk.RIGHT, fill=tk.X, expand=True, padx=5)
 
 def logout():
-    """Đăng xuất và quay lại màn hình đăng nhập"""
+    """Đăng xuất"""
     global current_user_id, current_username, selected_category
     if messagebox.askyesno("Xác nhận", "Bạn có chắc muốn đăng xuất?"):
         current_user_id = None
         current_username = None
         selected_category = None
-        # Ẩn ứng dụng chính và hiển thị lại màn hình đăng nhập
         show_login()
 
-# ======== CHỨC NĂNG QUẢN LÝ USER (CHO ADMIN) ========
+# ======== CHỨC NĂNG QUẢN LÝ USER ========
 def hien_thi_users():
-    """Hiển thị danh sách users (cho admin)"""
+    """Hiển thị danh sách users"""
     global tree_users
     for row in tree_users.get_children():
         tree_users.delete(row)
@@ -341,7 +340,7 @@ def hien_thi_users():
         messagebox.showerror("Lỗi DB", f"Có lỗi khi đọc dữ liệu:\n{e}")
 
 def xoa_user():
-    """Xóa user (cho admin)"""
+    """Xóa user"""
     global tree_users
     selected = tree_users.selection()
     if not selected:
@@ -411,7 +410,7 @@ def show_admin_panel():
 root = tk.Tk()
 root.title("Quản lý chi tiêu cá nhân - Đăng nhập")
 root.geometry("400x250")
-root.resizable(True, True)  # THÊM DÒNG NÀY - CHO PHÉP RESIZE VÀ MAXIMIZE
+root.resizable(True, True)
 
 # Khởi tạo database
 try:
@@ -421,3 +420,4 @@ except Exception as e:
 
 show_login()
 root.mainloop()
+
