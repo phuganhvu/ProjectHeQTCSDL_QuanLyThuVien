@@ -137,7 +137,6 @@ def delete_user(user_id):
 
 
 
-
 def ai_canh_bao_bat_thuong():
     """Phát hiện chi tiêu bất thường so với thói quen"""
     try:
@@ -178,7 +177,7 @@ def ai_canh_bao_bat_thuong():
             current_month = data[0]  # Tháng gần nhất
             previous_months = data[1:]  # Các tháng trước
 
-            # Tính trung bình các tháng trước (loại bỏ giá trị ngoại lai)
+            # Tính trung bình các tháng trước
             amounts = [amount for _, _, amount in previous_months]
             if not amounts:
                 continue
@@ -255,7 +254,7 @@ def ai_canh_bao_bat_thuong():
             advice_frame = tk.Frame(content_frame, bg="#FFF0F0", pady=20)
             advice_frame.pack(fill=tk.X)
 
-            advice_text = """💡 **LỜI KHUYÊN:**
+            advice_text = """💡 LỜI KHUYÊN:
 • Kiểm tra lại chi tiêu cho các danh mục trên
 • Xem xét cắt giảm nếu không thực sự cần thiết  
 • Thiết lập ngân sách cho từng danh mục"""
@@ -284,3 +283,4 @@ def ai_canh_bao_bat_thuong():
 
     except Exception as e:
         messagebox.showerror("Lỗi", f"Không thể phân tích cảnh báo: {str(e)}")
+
