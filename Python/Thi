@@ -1,1 +1,423 @@
+import tkinter as tk
+from tkinter import messagebox, ttk
+from database import get_connection, init_database, check_login, register_user, get_all_users, delete_user
+import matplotlib.pyplot as plt
+from tkcalendar import DateEntry
+from datetime import datetime
 
+CATEGORIES = ["Ăn uống", "Đi lại", "Học tập", "Giải trí", "Mua sắm", "Khác"]
+CATEGORY_COLORS = {
+    "Ăn uống": "#FFB6C1",
+    "Đi lại": "#B0E0E6",
+    "Học tập": "#DDA0DD",
+    "Giải trí": "#F0E68C",
+    "Mua sắm": "#98D8C8",
+    "Khác": "#FFDAB9"
+}
+
+FONT_TITLE = ("Segoe UI", 20, "bold")
+FONT_SUBTITLE = ("Segoe UI", 12, "bold")
+FONT_NORMAL = ("Segoe UI", 11)
+FONT_SMALL = ("Segoe UI", 9)
+
+# Biến toàn cục lưu UserID và username của người dùng hiện tại
+current_user_id = None
+current_username = None
+selected_category = None
+editing_expense_id = None
+
+
+# ======== HÀM TIỆN ÍCH ========
+def format_currency(amount):
+    """Format số tiền với dấu chấm phân cách, chỉ lấy đến hàng đơn vị"""
+    if amount is None:
+        return "0"
+    try:
+        amount_int = int(float(amount))
+        return f"{amount_int:,}".replace(",", ".")
+    except:
+        return "0"
+
+
+def parse_currency(text):
+    """Chuyển đổi text có dấu chấm về số"""
+    if not text:
+        return 0
+    try:
+        # Loại bỏ dấu chấm phân cách
+        text = text.replace(".", "")
+        return float(text)
+    except:
+        return 0
+
+
+# ======== CHỨC NĂNG ĐĂNG NHẬP ========
+def create_rounded_button(parent, text, command, bg_color, fg_color="white", width=200, height=50):
+    btn = tk.Button(parent, text=text, command=command, bg=bg_color, fg=fg_color,
+                    font=FONT_SUBTITLE, width=width, height=height,
+                    relief=tk.FLAT, cursor="hand2", bd=0,
+                    activebackground=bg_color, activeforeground=fg_color)
+    return btn
+
+
+def show_login():
+    for widget in root.winfo_children():
+        widget.destroy()
+
+    root.title("Đăng nhập - Quản lý chi tiêu cá nhân")
+    root.geometry("500x400")
+    root.resizable(False, False)
+    root.configure(bg="#F5F5F5")
+
+    # Căn giữa cửa sổ
+    root.update_idletasks()
+    x = (root.winfo_screenwidth() // 2) - (500 // 2)
+    y = (root.winfo_screenheight() // 2) - (400 // 2)
+    root.geometry(f"500x400+{x}+{y}")
+
+    # Frame chính
+    frame_login = tk.Frame(root, bg="#F5F5F5")
+    frame_login.pack(expand=True)
+
+    tk.Label(frame_login, text="ĐĂNG NHẬP", font=FONT_TITLE, bg="#F5F5F5", fg="#333333").pack(pady=(20, 30))
+
+    # Tên đăng nhập
+    tk.Label(frame_login, text="Tên đăng nhập:", font=FONT_NORMAL, bg="#F5F5F5", fg="#555555").pack(anchor="w", padx=80,
+                                                                                                    pady=(0, 5))
+    entry_username = tk.Entry(frame_login, width=30, font=FONT_NORMAL, relief=tk.FLAT, bd=3,
+                              highlightthickness=1, highlightbackground="#DDD", highlightcolor="#98D8C8")
+    entry_username.pack(pady=(0, 15))
+    entry_username.focus()
+
+    # Mật khẩu
+    tk.Label(frame_login, text="Mật khẩu:", font=FONT_NORMAL, bg="#F5F5F5", fg="#555555").pack(anchor="w", padx=80,
+                                                                                               pady=(0, 5))
+
+    # Frame cho mật khẩu và nút hiển thị
+    password_frame = tk.Frame(frame_login, bg="#F5F5F5")
+    password_frame.pack(pady=(0, 20))
+
+    entry_password = tk.Entry(password_frame, width=27, font=FONT_NORMAL, show="•", relief=tk.FLAT, bd=3,
+                              highlightthickness=1, highlightbackground="#DDD", highlightcolor="#98D8C8")
+    entry_password.pack(side=tk.LEFT, padx=(0, 5))
+
+    # Biến để theo dõi trạng thái hiển thị mật khẩu
+    password_visible = tk.BooleanVar(value=False)
+
+    def toggle_password():
+        if password_visible.get():
+            # Ẩn mật khẩu
+            entry_password.config(show="•")
+            btn_show_password.config(text="👁")
+        else:
+            # Hiển thị mật khẩu
+            entry_password.config(show="")
+            btn_show_password.config(text="🙈")
+        password_visible.set(not password_visible.get())
+
+    # Nút hiển thị mật khẩu
+    btn_show_password = tk.Button(password_frame, text="👁", command=toggle_password,
+                                  font=("Segoe UI", 11), bg="#E0E0E0", fg="#555555",
+                                  relief=tk.FLAT, width=2, height=1,
+                                  activebackground="#D0D0D0", activeforeground="#333333")
+    btn_show_password.pack(side=tk.LEFT)
+
+    # ====== HÀM XỬ LÝ ======
+    def login():
+        global current_user_id, current_username
+        username = entry_username.get().strip()
+        password = entry_password.get().strip()
+
+        if not username or not password:
+            messagebox.showwarning("Thiếu thông tin", "Vui lòng nhập đầy đủ tên đăng nhập và mật khẩu!")
+            return
+
+        user_id = check_login(username, password)
+        if user_id:
+            current_user_id = user_id
+            current_username = username
+            messagebox.showinfo("Thành công", f"Đăng nhập thành công!\nXin chào, {username}!")
+            show_home_page()
+        else:
+            messagebox.showerror("Lỗi đăng nhập", "Tên đăng nhập hoặc mật khẩu không đúng!")
+
+    def register():
+        username = entry_username.get().strip()
+        password = entry_password.get().strip()
+
+        if not username or not password:
+            messagebox.showwarning("Thiếu thông tin", "Vui lòng nhập đầy đủ tên đăng nhập và mật khẩu!")
+            return
+        if len(password) < 4:
+            messagebox.showwarning("Mật khẩu yếu", "Mật khẩu phải có ít nhất 4 ký tự!")
+            return
+
+        if register_user(username, password):
+            messagebox.showinfo("Thành công", "Đăng ký thành công! Vui lòng đăng nhập.")
+            entry_password.delete(0, tk.END)
+        else:
+            messagebox.showerror("Lỗi đăng ký", "Tên đăng nhập đã tồn tại!")
+
+    # ====== Hai nút đăng nhập & đăng ký ======
+    frame_buttons = tk.Frame(frame_login, bg="#F5F5F5")
+    frame_buttons.pack(pady=15)
+
+    def style_button(btn, bg, fg, border, hover_bg):
+        btn.configure(
+            bg=bg,
+            fg=fg,
+            font=("Segoe UI", 11, "bold"),
+            relief="flat",
+            bd=0,
+            width=12,
+            height=1,
+            highlightthickness=1,
+            highlightbackground=border,
+            cursor="hand2",
+            activebackground=hover_bg,
+            activeforeground="#FFFFFF"
+        )
+
+    # Tạo nút
+    btn_login = tk.Button(frame_buttons, text="Đăng nhập", command=login)
+    btn_register = tk.Button(frame_buttons, text="Đăng ký", command=register)
+
+    # Gán style
+    style_button(btn_login, bg="#4FC3A1", fg="#FFFFFF", border="#3CA48A", hover_bg="#3CA48A")
+    style_button(btn_register, bg="#D8B4E2", fg="#FFFFFF", border="#B685C5", hover_bg="#B685C5")
+
+    # Hiệu ứng bo góc
+    btn_login.configure(font=("Segoe UI", 11, "bold"), relief="flat")
+    btn_register.configure(font=("Segoe UI", 11, "bold"), relief="flat")
+
+    # Đặt ngang hàng
+    btn_login.grid(row=0, column=0, padx=10)
+    btn_register.grid(row=0, column=1, padx=10)
+
+
+
+
+
+
+
+def show_home_page():
+    """Hiển thị trang chủ với 3 nút chức năng chính"""
+    # Kiểm tra nếu là admin thì hiển thị giao diện quản lý users
+    if current_username == "admin":
+        show_admin_panel()
+        return
+
+    # Xóa tất cả widget cũ
+    for widget in root.winfo_children():
+        widget.destroy()
+
+    root.title("Trang chủ - Quản lý chi tiêu cá nhân")
+    root.geometry("1000x750")
+    root.resizable(True, True)  # SỬA TỪ KHÔNG CÓ THÀNH CÓ
+    root.configure(bg="#F5F5F5")
+
+    # Header với avatar và thông tin
+    header_frame = tk.Frame(root, bg="#FFFFFF", height=150)
+    header_frame.pack(fill=tk.X, padx=0, pady=0)
+    header_frame.pack_propagate(False)
+
+    # Avatar (vòng tròn đơn giản)
+    avatar_frame = tk.Frame(header_frame, bg="#FFFFFF")
+    avatar_frame.pack(side=tk.LEFT, padx=30, pady=20)
+
+    avatar_canvas = tk.Canvas(avatar_frame, width=100, height=100, bg="#FFFFFF", highlightthickness=0)
+    avatar_canvas.pack()
+    avatar_canvas.create_oval(5, 5, 95, 95, fill="#98D8C8", outline="#98D8C8", width=2)
+    avatar_canvas.create_text(50, 50, text=current_username[0].upper(), font=("Segoe UI", 40, "bold"), fill="#FFFFFF")
+
+    # Thông tin tài khoản
+    info_frame = tk.Frame(header_frame, bg="#FFFFFF")
+    info_frame.pack(side=tk.LEFT, padx=20, pady=20, anchor="w")
+
+    tk.Label(info_frame, text=f"Xin chào, {current_username}!", font=FONT_TITLE, bg="#FFFFFF", fg="#333333").pack(
+        anchor="w")
+    tk.Label(info_frame, text=f"Tài khoản: {current_username}", font=FONT_NORMAL, bg="#FFFFFF", fg="#666666").pack(
+        anchor="w", pady=(5, 0))
+
+    # Nút đăng xuất
+    logout_btn = tk.Button(header_frame, text="Đăng xuất", command=logout, bg="#FFB6C1", fg="#FFFFFF",
+                           font=FONT_SMALL, relief=tk.FLAT, cursor="hand2", padx=15, pady=5)
+    logout_btn.pack(side=tk.RIGHT, padx=30, pady=20)
+
+    # Thống kê tổng quan
+    stats_frame = tk.Frame(root, bg="#F5F5F5", padx=20, pady=20)
+    stats_frame.pack(fill=tk.X)
+
+    total_expenses = get_total_expenses()
+    expense_count = get_expense_count()
+    monthly_expense = get_monthly_expense()
+
+    # Tạo 3 card thống kê trong grid
+    cards_container = tk.Frame(stats_frame, bg="#F5F5F5")
+    cards_container.pack(fill=tk.X)
+
+    stats_data = [
+        ("Tổng chi tiêu", f"{format_currency(total_expenses)} VNĐ", "#4FC3A1"),
+        ("Số lượng chi tiêu", f"{expense_count} giao dịch", "#DDA0DD"),
+        ("Chi tiêu tháng này", f"{format_currency(monthly_expense)} VNĐ", "#FFB6C1")
+    ]
+
+    for i, (title, value, color) in enumerate(stats_data):
+        card = tk.Frame(cards_container, bg=color, relief=tk.RAISED, bd=2, padx=20, pady=15)
+        card.grid(row=0, column=i, padx=5, sticky="nsew")
+        cards_container.columnconfigure(i, weight=1)
+
+        tk.Label(card, text=title, font=FONT_SMALL, bg=color, fg="white").pack()
+        tk.Label(card, text=value, font=("Segoe UI", 14, "bold"),
+                 bg=color, fg="white").pack(pady=(5, 0))
+
+    # ====== 3 NÚT CHỨC NĂNG CHÍNH ======
+    buttons_frame = tk.Frame(root, bg="#F5F5F5")
+    buttons_frame.pack(fill=tk.BOTH, expand=True, padx=50, pady=30)
+
+    # Tạo hàm helper để tạo nút đẹp
+    def create_feature_button(parent, text, command, color):
+        btn = tk.Button(
+            parent,
+            text=text,
+            command=command,
+            bg=color,
+            fg="white",
+            font=("Segoe UI", 16, "bold"),
+            relief=tk.FLAT,
+            cursor="hand2",
+            padx=15,
+            pady=12,
+            width=20
+        )
+        return btn
+
+    # Nút 1: Thêm chi tiêu
+    btn_add = create_feature_button(buttons_frame, "➕ THÊM CHI TIÊU",
+                                    show_add_expense_window, "#4FC3A1")
+    btn_add.pack(pady=10, fill=tk.X)
+
+    # Nút 2: Xem chi tiêu
+    btn_view = create_feature_button(buttons_frame, "📊 XEM CHI TIÊU",
+                                     show_view_expense_window, "#DDA0DD")
+    btn_view.pack(pady=10, fill=tk.X)
+
+    # Nút 3: Biểu đồ
+    btn_chart = create_feature_button(buttons_frame, "📈 BIỂU ĐỒ",
+                                      show_chart_window, "#FFB6C1")
+    btn_chart.pack(pady=10, fill=tk.X)
+
+    # AI Buttons Frame
+    ai_frame = tk.Frame(buttons_frame, bg="#F5F5F5")
+    ai_frame.pack(fill=tk.X, pady=10)
+
+    btn_chatbot = create_feature_button(ai_frame, "🤖 TRỢ LÝ TÀI CHÍNH", chatbot_tu_van, "#6A5ACD")
+    btn_chatbot.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5)
+
+    btn_warning = create_feature_button(ai_frame, "🚨 CẢNH BÁO", ai_canh_bao_bat_thuong, "#FF6B6B")
+    btn_warning.pack(side=tk.RIGHT, fill=tk.X, expand=True, padx=5)
+
+def logout():
+    """Đăng xuất và quay lại màn hình đăng nhập"""
+    global current_user_id, current_username, selected_category
+    if messagebox.askyesno("Xác nhận", "Bạn có chắc muốn đăng xuất?"):
+        current_user_id = None
+        current_username = None
+        selected_category = None
+        # Ẩn ứng dụng chính và hiển thị lại màn hình đăng nhập
+        show_login()
+
+# ======== CHỨC NĂNG QUẢN LÝ USER (CHO ADMIN) ========
+def hien_thi_users():
+    """Hiển thị danh sách users (cho admin)"""
+    global tree_users
+    for row in tree_users.get_children():
+        tree_users.delete(row)
+    try:
+        users = get_all_users()
+        for user_id, username, password in users:
+            tree_users.insert("", tk.END, values=(user_id, username, password))
+    except Exception as e:
+        messagebox.showerror("Lỗi DB", f"Có lỗi khi đọc dữ liệu:\n{e}")
+
+def xoa_user():
+    """Xóa user (cho admin)"""
+    global tree_users
+    selected = tree_users.selection()
+    if not selected:
+        messagebox.showwarning("Chưa chọn", "Vui lòng chọn một user để xóa.")
+        return
+
+    item = tree_users.item(selected[0])
+    user_id = item['values'][0]
+    username = item['values'][1]
+
+    if username == "admin":
+        messagebox.showwarning("Không thể xóa", "Không thể xóa tài khoản admin!")
+        return
+
+    if not messagebox.askyesno("Xác nhận",
+                               f"Bạn có chắc muốn xóa user '{username}' (ID: {user_id})?\nTất cả chi tiêu của user này cũng sẽ bị xóa!"):
+        return
+
+    if delete_user(user_id):
+        messagebox.showinfo("Thành công", f"Đã xóa user '{username}'!")
+        hien_thi_users()
+    else:
+        messagebox.showerror("Lỗi", "Không thể xóa user này!")
+
+def show_admin_panel():
+    for widget in root.winfo_children():
+        widget.destroy()
+
+    root.title("Quản lý tài khoản người dùng - Admin")
+    root.geometry("700x500")
+    root.resizable(True, True)
+
+    title_frame = tk.Frame(root)
+    title_frame.pack(pady=10)
+    tk.Label(title_frame, text="QUẢN LÝ TÀI KHOẢN NGƯỜI DÙNG", font=("Arial", 16, "bold")).pack()
+    tk.Label(title_frame, text="(Chế độ Admin)", font=("Arial", 10), fg="gray").pack()
+
+    # Bảng hiển thị users
+    global tree_users
+    frame_table = tk.Frame(root)
+    frame_table.pack(pady=10, padx=10, fill=tk.BOTH, expand=True)
+
+    tree_users = ttk.Treeview(frame_table, columns=("ID", "Username", "Password"), show="headings")
+    tree_users.heading("ID", text="ID")
+    tree_users.heading("Username", text="Tên đăng nhập")
+    tree_users.heading("Password", text="Mật khẩu")
+    tree_users.column("ID", width=80, anchor="center")
+    tree_users.column("Username", width=200, anchor="center")
+    tree_users.column("Password", width=200, anchor="center")
+    tree_users.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+    # Scrollbar
+    scrollbar_users = ttk.Scrollbar(frame_table, orient=tk.VERTICAL, command=tree_users.yview)
+    tree_users.configure(yscrollcommand=scrollbar_users.set)
+    scrollbar_users.pack(side=tk.RIGHT, fill=tk.Y)
+
+    # Nút chức năng
+    btn_frame = tk.Frame(root)
+    btn_frame.pack(pady=10)
+
+    tk.Button(btn_frame, text="Làm mới", command=hien_thi_users, width=15).pack(side=tk.LEFT, padx=5)
+    tk.Button(btn_frame, text="Xóa user", command=xoa_user, width=15, fg="red").pack(side=tk.LEFT, padx=5)
+    tk.Button(btn_frame, text="Đăng xuất", command=logout, width=15, fg="blue").pack(side=tk.LEFT, padx=5)
+    hien_thi_users()
+
+# ======== KHỞI TẠO ỨNG DỤNG ========
+root = tk.Tk()
+root.title("Quản lý chi tiêu cá nhân - Đăng nhập")
+root.geometry("400x250")
+root.resizable(True, True)  # THÊM DÒNG NÀY - CHO PHÉP RESIZE VÀ MAXIMIZE
+
+# Khởi tạo database
+try:
+    init_database()
+except Exception as e:
+    messagebox.showerror("Lỗi", f"Không thể kết nối database:\n{e}")
+
+show_login()
+root.mainloop()
