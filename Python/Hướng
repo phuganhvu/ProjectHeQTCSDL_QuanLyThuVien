@@ -1,0 +1,442 @@
+
+def chatbot_tu_van():
+    chatbot_window = tk.Toplevel(root)
+    chatbot_window.title("AI Financial Advisor - Trợ lý tài chính thông minh")
+    chatbot_window.geometry("600x700")
+    chatbot_window.configure(bg="#F0F8FF")
+    chatbot_window.transient(root)
+    chatbot_window.grab_set()
+
+    # Căn giữa cửa sổ
+    chatbot_window.update_idletasks()
+    x = (chatbot_window.winfo_screenwidth() // 2) - (600 // 2)
+    y = (chatbot_window.winfo_screenheight() // 2) - (700 // 2)
+    chatbot_window.geometry(f"600x700+{x}+{y}")
+
+    # Header
+    header_frame = tk.Frame(chatbot_window, bg="#4FC3A1", height=80)
+    header_frame.pack(fill=tk.X)
+    header_frame.pack_propagate(False)
+
+    tk.Label(header_frame, text="🤖 TRỢ LÝ TÀI CHÍNH AI THÔNG MINH",
+             font=("Segoe UI", 16, "bold"), bg="#4FC3A1", fg="white").pack(pady=20)
+
+    # Hiển thị tin nhắn
+    chat_frame = tk.Frame(chatbot_window, bg="#F0F8FF")
+    chat_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
+
+    # Canvas với scrollbar cho chat
+    canvas = tk.Canvas(chat_frame, bg="#F0F8FF", highlightthickness=0)
+    scrollbar = ttk.Scrollbar(chat_frame, orient="vertical", command=canvas.yview)
+    scrollable_frame = tk.Frame(canvas, bg="#F0F8FF")
+
+    scrollable_frame.bind(
+        "<Configure>",
+        lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+    )
+
+    canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+    canvas.configure(yscrollcommand=scrollbar.set)
+
+    # Khung nhập tin nhắn
+    input_frame = tk.Frame(chatbot_window, bg="#F0F8FF", height=80)
+    input_frame.pack(fill=tk.X, padx=20, pady=10)
+    input_frame.pack_propagate(False)
+
+    # ĐỊNH NGHĨA BIẾN TRƯỚC KHI SỬ DỤNG
+    chat_container = scrollable_frame
+    entry_msg = tk.Entry(input_frame, font=FONT_NORMAL, relief=tk.FLAT, bd=2)
+
+    def add_message(sender, message, is_user=False):
+        """Thêm tin nhắn vào khung chat"""
+        message_frame = tk.Frame(chat_container, bg="#F0F8FF")
+        message_frame.pack(fill=tk.X, pady=5)
+
+        if is_user:
+            # Tin nhắn người dùng (bên phải)
+            msg_label = tk.Label(message_frame, text=message,
+                                 font=FONT_NORMAL, bg="#DCF8C6",
+                                 fg="#333333", justify=tk.LEFT,
+                                 wraplength=400, padx=15, pady=10)
+            msg_label.pack(side=tk.RIGHT, padx=10)
+            tk.Label(message_frame, text="👤", bg="#F0F8FF",
+                     font=("Arial", 12)).pack(side=tk.RIGHT)
+        else:
+            # Tin nhắn bot (bên trái)
+            tk.Label(message_frame, text="🤖", bg="#F0F8FF",
+                     font=("Arial", 12)).pack(side=tk.LEFT)
+            msg_label = tk.Label(message_frame, text=message,
+                                 font=FONT_NORMAL, bg="#FFFFFF",
+                                 fg="#333333", justify=tk.LEFT,
+                                 wraplength=400, padx=15, pady=10)
+            msg_label.pack(side=tk.LEFT, padx=10)
+
+        # Cuộn xuống dưới cùng
+        canvas.update_idletasks()
+        canvas.yview_moveto(1.0)
+
+    def send_message():
+        """Xử lý tin nhắn người dùng gửi"""
+        message = entry_msg.get().strip()
+        if not message:
+            return
+
+        # Hiển thị tin nhắn người dùng
+        add_message("user", message, is_user=True)
+        entry_msg.delete(0, tk.END)
+
+        # Xử lý và trả lời với AI thực sự
+        response = process_with_ai(message)
+        add_message("bot", response, is_user=False)
+
+    def quick_response(question):
+        """Xử lý câu hỏi nhanh từ nút"""
+        add_message("user", question, is_user=True)
+        response = process_with_ai(question)
+        add_message("bot", response, is_user=False)
+
+    # ========== AI THỰC SỰ VỚI MACHINE LEARNING ==========
+
+    def get_user_spending_data():
+        """Lấy dữ liệu chi tiêu của user để phân tích"""
+        try:
+            conn = get_connection()
+            query = """
+                SELECT Ngay, Danh_muc, So_tien, Ghi_chu 
+                FROM ChiTieu 
+                WHERE UserID = %s 
+                ORDER BY Ngay
+            """
+            df = pd.read_sql(query, conn, params=[current_user_id])
+            conn.close()
+
+            if df.empty:
+                return None
+
+            # Chuyển đổi kiểu dữ liệu
+            df['Ngay'] = pd.to_datetime(df['Ngay'])
+            df['So_tien'] = pd.to_numeric(df['So_tien'])
+            df['Thang'] = df['Ngay'].dt.to_period('M')
+            df['Ngay_trong_tuan'] = df['Ngay'].dt.dayofweek
+            df['Ngay_trong_thang'] = df['Ngay'].dt.day
+
+            return df
+        except Exception as e:
+            print(f"Lỗi khi lấy dữ liệu: {e}")
+            return None
+
+    def predict_future_spending():
+        """Dự đoán chi tiêu trong tương lai bằng Linear Regression"""
+        df = get_user_spending_data()
+        if df is None or len(df) < 10:
+            return "🤔 Cần thêm dữ liệu chi tiêu (ít nhất 10 giao dịch) để dự đoán tương lai!"
+
+        try:
+            # Chuẩn bị dữ liệu cho mô hình
+            monthly_data = df.groupby('Thang')['So_tien'].sum().reset_index()
+            monthly_data['Thang_so'] = range(len(monthly_data))
+
+            X = monthly_data[['Thang_so']]
+            y = monthly_data['So_tien']
+
+            # Huấn luyện mô hình Linear Regression
+            model = LinearRegression()
+            model.fit(X, y)
+
+            # Dự đoán 3 tháng tiếp theo
+            future_months = [[len(monthly_data)], [len(monthly_data) + 1], [len(monthly_data) + 2]]
+            predictions = model.predict(future_months)
+
+            response = "🔮 **DỰ ĐOÁN CHI TIÊU 3 THÁNG TỚI:**\n\n"
+            months = ["Tháng sau", "2 tháng tới", "3 tháng tới"]
+
+            for i, (month, pred) in enumerate(zip(months, predictions)):
+                trend = "↗️ Tăng" if pred > y.mean() else "↘️ Giảm"
+                response += f"• {month}: {format_currency(pred)} ({trend})\n"
+
+            # Phân tích xu hướng
+            trend_slope = model.coef_[0]
+            if trend_slope > 0:
+                trend_analysis = f"📈 Xu hướng tăng: +{format_currency(trend_slope)}/tháng"
+            else:
+                trend_analysis = f"📉 Xu hướng giảm: {format_currency(trend_slope)}/tháng"
+
+            response += f"\n{trend_analysis}"
+            return response
+
+        except Exception as e:
+            return f"❌ Lỗi dự đoán: {str(e)}"
+
+    def analyze_spending_patterns():
+        """Phân tích mẫu chi tiêu cơ bản (fallback khi không đủ dữ liệu cho AI)"""
+        try:
+            conn = get_connection()
+            cursor = conn.cursor()
+
+            # Lấy tổng chi theo danh mục
+            cursor.execute("""
+                SELECT Danh_muc, SUM(So_tien) as Tong, COUNT(*) as So_luong
+                FROM ChiTieu 
+                WHERE UserID = %s 
+                GROUP BY Danh_muc 
+                ORDER BY Tong DESC
+            """, (current_user_id,))
+
+            categories = cursor.fetchall()
+            conn.close()
+
+            if not categories:
+                return "🤔 Bạn chưa có chi tiêu nào để phân tích. Hãy bắt đầu thêm chi tiêu!"
+
+            total_all = sum(float(row[1]) for row in categories)
+            response = "📊 **PHÂN TÍCH CHI TIÊU CỦA BẠN:**\n\n"
+
+            for category, total, count in categories:
+                percentage = (float(total) / total_all) * 100
+                response += f"• {category}: {format_currency(total)} ({percentage:.1f}%)\n"
+                response += f"  └ {count} giao dịch\n"
+
+            # Tìm danh mục chi nhiều nhất
+            top_category = categories[0]
+            response += f"\n💡 **NHẬN XÉT:** Bạn chi nhiều nhất cho {top_category[0]} ({format_currency(top_category[1])})"
+
+            return response
+
+        except Exception as e:
+            return f"❌ Lỗi khi phân tích: {str(e)}"
+
+    def analyze_spending_patterns_ml():
+        """Phân tích mẫu chi tiêu bằng K-Means Clustering"""
+        df = get_user_spending_data()
+        if df is None or len(df) < 15:
+            return analyze_spending_patterns()  # Fallback về phương pháp cũ
+
+        try:
+            # Chuẩn bị dữ liệu cho clustering
+            features = df[['So_tien', 'Ngay_trong_tuan', 'Ngay_trong_thang']]
+            scaler = StandardScaler()
+            features_scaled = scaler.fit_transform(features)
+
+            # Phân cụm với K-Means
+            kmeans = KMeans(n_clusters=min(3, len(df) // 5), random_state=42)
+            df['Cluster'] = kmeans.fit_predict(features_scaled)
+
+            # Phân tích các cụm
+            response = "🎯 **PHÂN TÍCH MẪU CHI TIÊU (AI):**\n\n"
+
+            for cluster_idx in df['Cluster'].unique():
+                cluster_data = df[df['Cluster'] == cluster_idx]
+                avg_amount = cluster_data['So_tien'].mean()
+                common_category = cluster_data['Danh_muc'].mode()[0] if not cluster_data[
+                    'Danh_muc'].mode().empty else "Đa dạng"
+                common_day = cluster_data['Ngay_trong_tuan'].mode()[0]
+
+                day_names = ["Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7", "Chủ nhật"]
+
+                response += f"**Nhóm {cluster_idx + 1}:**\n"
+                response += f"• Số tiền TB: {format_currency(avg_amount)}\n"
+                response += f"• Danh mục chính: {common_category}\n"
+                response += f"• Ngày hay chi: {day_names[common_day]}\n"
+                response += f"• Số giao dịch: {len(cluster_data)}\n\n"
+
+            # Tìm insight đặc biệt
+            if len(df['Cluster'].unique()) > 1:
+                largest_cluster = df['Cluster'].value_counts().index[0]
+                largest_data = df[df['Cluster'] == largest_cluster]
+                insight_category = largest_data['Danh_muc'].mode()[0]
+                insight_amount = largest_data['So_tien'].mean()
+
+                response += f"💡 **INSIGHT:** Bạn thường chi {format_currency(insight_amount)} cho {insight_category}"
+
+            return response
+
+        except Exception as e:
+            return f"❌ Lỗi phân tích AI: {str(e)}"
+
+    def detect_spending_anomalies_ml():
+        """Phát hiện bất thường bằng phương pháp thống kê"""
+        df = get_user_spending_data()
+        if df is None:
+            return "Không có dữ liệu để phân tích!"
+
+        try:
+            # Tính Z-score để phát hiện outliers
+            mean_amount = df['So_tien'].mean()
+            std_amount = df['So_tien'].std()
+
+            if std_amount == 0:  # Tránh chia cho 0
+                return "✅ Không có chi tiêu bất thường nào được phát hiện!"
+
+            df['Z_score'] = (df['So_tien'] - mean_amount) / std_amount
+            anomalies = df[df['Z_score'].abs() > 2]  # Z-score > 2 là bất thường
+
+            if anomalies.empty:
+                return "✅ Không có chi tiêu bất thường nào được phát hiện!"
+
+            response = "🚨 **CHI TIÊU BẤT THƯỜNG (AI):**\n\n"
+
+            for _, anomaly in anomalies.head(3).iterrows():
+                z_score = anomaly['Z_score']
+                deviation = "cao" if z_score > 0 else "thấp"
+                response += f"• {anomaly['Ngay'].strftime('%d/%m/%Y')}: {format_currency(anomaly['So_tien'])} cho {anomaly['Danh_muc']}\n"
+                response += f"  ⚠️ Mức độ: {'Rất cao' if z_score > 3 else 'Cao'} (Z-score: {z_score:.1f})\n\n"
+
+            return response
+
+        except Exception as e:
+            return f"❌ Lỗi phát hiện bất thường: {str(e)}"
+
+    def optimize_budget_recommendation():
+        """Đề xuất ngân sách tối ưu dựa trên lịch sử"""
+        df = get_user_spending_data()
+        if df is None or len(df) < 8:
+            return "💡 Hãy thêm nhiều chi tiêu hơn để nhận đề xuất ngân sách tối ưu!"
+
+        try:
+            # Phân tích chi tiêu theo danh mục
+            category_stats = df.groupby('Danh_muc')['So_tien'].agg(['mean', 'count', 'std']).reset_index()
+            total_mean = df['So_tien'].mean()
+
+            response = "💰 **ĐỀ XUẤT NGÂN SÁCH TỐI ƯU:**\n\n"
+
+            for _, category in category_stats.iterrows():
+                current_avg = category['mean']
+                optimal = current_avg * 0.9  # Giảm 10% so với trung bình
+
+                if category['count'] > 3:  # Chỉ đề xuất cho danh mục có đủ dữ liệu
+                    savings = current_avg - optimal
+                    response += f"• {category['Danh_muc']}: {format_currency(optimal)} (tiết kiệm {format_currency(savings)})\n"
+
+            monthly_saving = (category_stats['mean'].sum() * 0.1)  # Tổng tiết kiệm 10%
+            response += f"\n🎯 **Tổng tiết kiệm hàng tháng:** {format_currency(monthly_saving)}"
+
+            return response
+
+        except Exception as e:
+            return f"❌ Lỗi đề xuất ngân sách: {str(e)}"
+
+    def process_with_ai(message):
+        """Xử lý tin nhắn với AI thực sự"""
+        message_lower = message.lower()
+
+        # Mapping các câu hỏi với chức năng AI
+        ai_functions = {
+            'dự đoán': predict_future_spending,
+            'tương lai': predict_future_spending,
+            'dự báo': predict_future_spending,
+            'phân tích': analyze_spending_patterns_ml,
+            'mẫu': analyze_spending_patterns_ml,
+            'bất thường': detect_spending_anomalies_ml,
+            'outlier': detect_spending_anomalies_ml,
+            'ngân sách': optimize_budget_recommendation,
+            'tối ưu': optimize_budget_recommendation,
+            'tiết kiệm': optimize_budget_recommendation
+        }
+
+        # Tìm chức năng AI phù hợp
+        for keyword, ai_function in ai_functions.items():
+            if keyword in message_lower:
+                return ai_function()
+
+        # Fallback cho các câu hỏi thông thường
+        if any(word in message_lower for word in ["xin chào", "hello", "hi", "chào"]):
+            return get_greeting_response()
+        elif "cảm ơn" in message_lower:
+            return "🤖 Không có gì! Tôi luôn sẵn sàng hỗ trợ bạn. Còn gì khác tôi có thể giúp không?"
+        else:
+            return get_ai_default_response()
+
+    def get_greeting_response():
+        """Phản hồi chào hỏi thông minh"""
+        df = get_user_spending_data()
+        if df is not None and len(df) > 0:
+            recent_spending = df['So_tien'].tail(5).mean()
+            total_spent = df['So_tien'].sum()
+
+            greetings = [
+                f"Xin chào {current_username}! 🤖 Tôi đã phân tích {len(df)} giao dịch của bạn. Chi tiêu gần đây: {format_currency(recent_spending)}",
+                f"Chào bạn! 📊 Tổng chi tiêu của bạn: {format_currency(total_spent)}. Tôi có thể giúp gì thêm?",
+                f"Hello {current_username}! 💰 Tôi thấy bạn có {len(df)} giao dịch. Sẵn sàng phân tích chi tiêu!"
+            ]
+        else:
+            greetings = [
+                f"Xin chào {current_username}! 🤖 Tôi là trợ lý AI tài chính. Hãy bắt đầu thêm chi tiêu!",
+                f"Chào bạn! 📊 Hãy thêm chi tiêu đầu tiên để tôi có thể phân tích!",
+                f"Hello {current_username}! 💰 Sẵn sàng giúp bạn quản lý tài chính!"
+            ]
+
+        import random
+        return random.choice(greetings)
+
+    def get_ai_default_response():
+        """Phản hồi mặc định thông minh"""
+        df = get_user_spending_data()
+
+        if df is not None and len(df) > 10:
+            suggestions = [
+                "Tôi có thể **dự đoán** chi tiêu tương lai của bạn dựa trên dữ liệu hiện có!",
+                "Muốn tôi **phân tích** các mẫu chi tiêu ẩn trong dữ liệu của bạn?",
+                "Tôi có thể phát hiện **chi tiêu bất thường** mà bạn có thể chưa nhận ra!",
+                "Để tôi **đề xuất ngân sách tối ưu** dựa trên thói quen chi tiêu của bạn!"
+            ]
+        else:
+            suggestions = [
+                "Hãy thêm nhiều chi tiêu hơn để tôi có thể phân tích sâu hơn!",
+                "Với nhiều dữ liệu hơn, tôi có thể dự đoán xu hướng chi tiêu của bạn!",
+                "Thêm 10-15 giao dịch để tôi phân tích mẫu chi tiêu bằng AI!"
+            ]
+
+        import random
+        default = random.choice(suggestions)
+        return f"🤖 {default}\n\nHãy thử một trong các nút bên dưới để trải nghiệm AI!"
+
+    # ========== GIAO DIỆN NGƯỜI DÙNG ==========
+
+    # BÂY GIỜ MỚI ĐẶT CÁC WIDGET VÀ BIND EVENTS
+    entry_msg.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 10))
+    entry_msg.bind("<Return>", lambda e: send_message())
+
+    btn_send = tk.Button(input_frame, text="Gửi", command=send_message,
+                         bg="#4FC3A1", fg="white", font=FONT_SUBTITLE, relief=tk.FLAT)
+    btn_send.pack(side=tk.RIGHT)
+
+    # Các nút AI thực sự
+    quick_buttons_frame = tk.Frame(chatbot_window, bg="#F0F8FF")
+    quick_buttons_frame.pack(fill=tk.X, padx=20, pady=10)
+
+    quick_questions = [
+        ("🔮 Dự đoán tương lai", "dự đoán chi tiêu"),
+        ("🎯 Phân tích mẫu", "phân tích mẫu chi tiêu"),
+        ("🚨 Bất thường", "phát hiện bất thường"),
+        ("💰 Ngân sách tối ưu", "đề xuất ngân sách")
+    ]
+
+    for i, (btn_text, question) in enumerate(quick_questions):
+        btn = tk.Button(quick_buttons_frame, text=btn_text,
+                        command=lambda q=question: quick_response(q),
+                        bg="#6A5ACD", fg="white", font=FONT_SMALL,
+                        relief=tk.FLAT, padx=10, pady=8, width=15)
+        btn.grid(row=0, column=i, padx=5, sticky="ew")
+        quick_buttons_frame.columnconfigure(i, weight=1)
+
+    # Pack canvas và scrollbar
+    canvas.pack(side="left", fill="both", expand=True)
+    scrollbar.pack(side="right", fill="y")
+
+    # Tin nhắn chào mừng với AI
+    welcome_msg = """🤖 **TRỢ LÝ TÀI CHÍNH AI THÔNG MINH**
+
+Tôi sử dụng Machine Learning để:
+• 🔮 **Dự đoán** chi tiêu tương lai
+• 🎯 **Phân tích mẫu** chi tiêu ẩn  
+• 🚨 **Phát hiện bất thường** tự động
+• 💰 **Đề xuất ngân sách** tối ưu
+
+Hãy thử các tính năng AI bằng cách nhập câu hỏi hoặc sử dụng nút bên dưới!"""
+
+    add_message("bot", welcome_msg, is_user=False)
+
+    # Focus vào ô nhập
+    entry_msg.focus()
+
+    return chatbot_window
