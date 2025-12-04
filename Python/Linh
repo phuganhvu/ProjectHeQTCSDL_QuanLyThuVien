@@ -1,0 +1,426 @@
+
+# ======== CHỨC NĂNG CHÍNH ========
+def them_chi_tieu():
+    global selected_category, editing_expense_id
+    ngay_obj = entry_ngay.get_date()
+    ngay = ngay_obj.strftime("%Y-%m-%d")
+    danh_muc = selected_category
+    so_tien_text = entry_sotien.get().strip()
+    ghi_chu = entry_ghichu.get().strip()
+
+    if not danh_muc or not so_tien_text:
+        messagebox.showwarning("Thiếu thông tin", "Vui lòng nhập đầy đủ thông tin (danh mục & số tiền)!")
+        return
+
+    try:
+        so_tien = parse_currency(so_tien_text)  # Parse số tiền có dấu chấm
+    except ValueError:
+        messagebox.showerror("Lỗi", "Số tiền phải là số hợp lệ!")
+        return
+
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+
+        if editing_expense_id:  # Nếu đang ở chế độ sửa
+            # Kiểm tra quyền sở hữu trước khi sửa
+            cursor.execute("SELECT UserID FROM ChiTieu WHERE ID = %s", (editing_expense_id,))
+            result = cursor.fetchone()
+            if result and result[0] == current_user_id:
+                cursor.execute("""
+                    UPDATE ChiTieu 
+                    SET Ngay = %s, Danh_muc = %s, So_tien = %s, Ghi_chu = %s 
+                    WHERE ID = %s
+                """, (ngay, danh_muc, so_tien, ghi_chu, editing_expense_id))
+                conn.commit()
+                messagebox.showinfo("Thành công", "Đã cập nhật chi tiêu!")
+            else:
+                messagebox.showerror("Lỗi", "Không thể sửa chi tiêu này!")
+        else:  # Thêm mới
+            cursor.execute("INSERT INTO ChiTieu (Ngay, Danh_muc, So_tien, Ghi_chu, UserID) VALUES (%s, %s, %s, %s, %s)",
+                           (ngay, danh_muc, so_tien, ghi_chu, current_user_id))
+            conn.commit()
+            messagebox.showinfo("Thành công", "Đã thêm chi tiêu!")
+
+        conn.close()
+
+        # Reset form
+        entry_sotien.delete(0, tk.END)
+        entry_ghichu.delete(0, tk.END)
+        selected_category = None
+        editing_expense_id = None  # Reset biến sửa
+
+        # Reset màu nút danh mục
+        if 'category_buttons' in globals():
+            for btn_text, btn in category_buttons.items():
+                btn.configure(bg=CATEGORY_COLORS.get(btn_text, "#FFFFFF"), fg="#333333", relief=tk.RAISED)
+
+        # Đóng cửa sổ nếu đang ở chế độ sửa
+        if 'add_window' in globals() and editing_expense_id is None:
+            add_window.destroy()
+
+    except Exception as e:
+        messagebox.showerror("Lỗi DB", f"Có lỗi khi ghi vào cơ sở dữ liệu:\n{e}")
+
+def hien_thi_du_lieu(ngay=None, thang=None, nam=None):
+    """Hiển thị dữ liệu, có thể lọc theo ngày, tháng, năm - chỉ hiển thị của user hiện tại"""
+    for row in tree.get_children():
+        tree.delete(row)
+
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+
+        query = "SELECT ID, Ngay, Danh_muc, So_tien, Ghi_chu FROM ChiTieu WHERE UserID = %s"
+        params = [current_user_id]
+
+        if ngay:
+            query += " AND Ngay = %s"
+            params.append(ngay)
+        elif thang and nam:
+            query += " AND MONTH(Ngay) = %s AND YEAR(Ngay) = %s"
+            params.extend([thang, nam])
+        elif nam:
+            query += " AND YEAR(Ngay) = %s"
+            params.append(nam)
+
+        query += " ORDER BY Ngay DESC, ID DESC"
+        cursor.execute(query, tuple(params))
+        rows = cursor.fetchall()
+        conn.close()
+
+        for r in rows:
+            # Format số tiền
+            formatted_row = list(r)
+            formatted_row[3] = format_currency(r[3])  # Format số tiền ở cột thứ 3
+            tree.insert("", tk.END, values=formatted_row)
+
+    except Exception as e:
+        messagebox.showerror("Lỗi DB", f"Có lỗi khi đọc dữ liệu:\n{e}")
+
+def xoa_chi_tieu():
+    selected = tree.selection()
+    if not selected:
+        messagebox.showwarning("Chưa chọn", "Vui lòng chọn một dòng để xóa.")
+        return
+
+    item = tree.item(selected[0])
+    record_id = item['values'][0]
+
+    if not messagebox.askyesno("Xác nhận", f"Bạn có chắc muốn xóa chi tiêu ID = {record_id}?"):
+        return
+
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        # Kiểm tra xem chi tiêu có thuộc về user hiện tại không
+        cursor.execute("SELECT UserID FROM ChiTieu WHERE ID = %s", (record_id,))
+        result = cursor.fetchone()
+        if result and result[0] == current_user_id:
+            cursor.execute("DELETE FROM ChiTieu WHERE ID = %s", (record_id,))
+            conn.commit()
+            messagebox.showinfo("Thành công", "Đã xóa chi tiêu.")
+            hien_thi_du_lieu()
+        else:
+            messagebox.showerror("Lỗi", "Không thể xóa chi tiêu này!")
+        conn.close()
+    except Exception as e:
+        messagebox.showerror("Lỗi DB", f"Không thể xóa dữ liệu:\n{e}")
+
+
+def sua_chi_tieu():
+    """Chức năng sửa chi tiêu"""
+    global editing_expense_id
+
+    selected = tree.selection()
+    if not selected:
+        messagebox.showwarning("Chưa chọn", "Vui lòng chọn một dòng để sửa.")
+        return
+
+    item = tree.item(selected[0])
+    record_id = item['values'][0]
+
+    # Kiểm tra quyền sở hữu
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT UserID FROM ChiTieu WHERE ID = %s", (record_id,))
+        result = cursor.fetchone()
+        conn.close()
+
+        if not result or result[0] != current_user_id:
+            messagebox.showerror("Lỗi", "Không thể sửa chi tiêu này!")
+            return
+    except Exception as e:
+        messagebox.showerror("Lỗi", f"Không thể kiểm tra quyền sở hữu: {e}")
+        return
+
+    # Lấy thông tin chi tiêu để điền vào form
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT Ngay, Danh_muc, So_tien, Ghi_chu FROM ChiTieu WHERE ID = %s", (record_id,))
+        expense_data = cursor.fetchone()
+        conn.close()
+
+        if expense_data:
+            editing_expense_id = record_id
+
+            ngay_str = expense_data[0].strftime("%Y-%m-%d")  # Chuyển datetime.date thành string
+            expense_data_processed = (ngay_str, expense_data[1], expense_data[2], expense_data[3])
+
+            show_add_expense_window(expense_data_processed)  # Truyền dữ liệu đã xử lý vào form
+
+    except Exception as e:
+        messagebox.showerror("Lỗi", f"Không thể lấy thông tin chi tiêu: {e}")
+
+def select_category(category, category_buttons):
+    """Xử lý khi chọn danh mục chi tiêu"""
+    global selected_category
+    selected_category = category  # Lưu lại danh mục đã chọn
+
+    # Đặt lại màu cho tất cả nút
+    for cat, btn in category_buttons.items():
+        btn.configure(bg=CATEGORY_COLORS.get(cat, "#FFFFFF"), fg="#333333", relief=tk.RAISED)
+
+    # Tô sáng nút được chọn
+    category_buttons[category].configure(bg="#4FC3A1", fg="white", relief=tk.SUNKEN)
+
+
+def show_add_expense_window(expense_data=None):
+    """Hiển thị cửa sổ thêm/sửa chi tiêu riêng biệt"""
+    global entry_ngay, entry_sotien, entry_ghichu, selected_category, category_buttons, editing_expense_id, add_window
+
+    add_window = tk.Toplevel(root)
+
+    # Thiết lập tiêu đề dựa trên chế độ
+    if expense_data:
+        add_window.title("Sửa chi tiêu")
+        window_title = "✏️ SỬA CHI TIÊU"
+        button_text = "💾 Cập nhật chi tiêu"
+    else:
+        add_window.title("Thêm chi tiêu")
+        window_title = "➕ THÊM CHI TIÊU"
+        button_text = "➕ Thêm chi tiêu"
+        editing_expense_id = None  # Đảm bảo là chế độ thêm mới
+
+    add_window.geometry("600x700")
+    add_window.configure(bg="#F8F9FA")
+    add_window.transient(root)
+    add_window.grab_set()
+
+    # Căn giữa cửa sổ
+    add_window.update_idletasks()
+    x = (add_window.winfo_screenwidth() // 2) - (600 // 2)
+    y = (add_window.winfo_screenheight() // 2) - (700 // 2)
+    add_window.geometry(f"600x700+{x}+{y}")
+
+    # Tiêu đề
+    tk.Label(add_window, text=window_title, font=FONT_TITLE, bg="#F8F9FA", fg="#333333").pack(pady=(20, 30))
+
+    # Frame chính
+    main_frame = tk.Frame(add_window, bg="#F8F9FA")
+    main_frame.pack(fill=tk.BOTH, expand=True, padx=30, pady=10)
+
+    # ==== CHỌN NGÀY ====
+    date_frame = tk.LabelFrame(main_frame, text="📅 Chọn ngày", font=FONT_SUBTITLE,
+                               bg="#FFFFFF", fg="#333333", padx=15, pady=10)
+    date_frame.pack(fill=tk.X, pady=(0, 15))
+    entry_ngay = DateEntry(date_frame, date_pattern='yyyy-mm-dd', font=FONT_NORMAL, width=20)
+    entry_ngay.pack(pady=5)
+
+    # ==== CHỌN DANH MỤC ====
+    category_frame = tk.LabelFrame(main_frame, text="🗂️ Chọn danh mục", font=FONT_SUBTITLE,
+                                   bg="#FFFFFF", fg="#333333", padx=15, pady=10)
+    category_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 15))
+
+    btn_container = tk.Frame(category_frame, bg="#FFFFFF")
+    btn_container.pack(fill=tk.BOTH, expand=True, pady=10)
+
+    category_buttons = {}
+    total_cols = 3
+    for i, category in enumerate(CATEGORIES):
+        btn = tk.Button(
+            btn_container,
+            text=category,
+            font=FONT_NORMAL,
+            bg=CATEGORY_COLORS.get(category, "#FFFFFF"),
+            fg="#333333",
+            relief=tk.RAISED,
+            bd=1,
+            padx=20,
+            pady=10,
+            cursor="hand2",
+            activebackground="#333333",
+            activeforeground="#FFFFFF",
+            command=lambda c=category: select_category(c, category_buttons)
+        )
+        btn.grid(row=i // total_cols, column=i % total_cols, padx=10, pady=10, sticky="nsew")
+        category_buttons[category] = btn
+
+    for j in range(total_cols):
+        btn_container.columnconfigure(j, weight=1)
+
+    # ==== SỐ TIỀN ====
+    amount_frame = tk.LabelFrame(main_frame, text="💰 Nhập số tiền", font=FONT_SUBTITLE,
+                                 bg="#FFFFFF", fg="#333333", padx=15, pady=10)
+    amount_frame.pack(fill=tk.X, pady=(0, 15))
+
+    entry_sotien = tk.Entry(amount_frame, font=FONT_NORMAL, justify="right")
+    entry_sotien.pack(fill=tk.X, padx=10, pady=5)
+
+    def on_amount_change(event):
+        raw = entry_sotien.get().replace(".", "")
+        if not raw:
+            return
+        if raw.isdigit():
+            caret = entry_sotien.index(tk.INSERT)
+            formatted = format_currency(raw)
+            entry_sotien.delete(0, tk.END)
+            entry_sotien.insert(0, formatted)
+            entry_sotien.icursor(min(caret, len(formatted)))
+
+    entry_sotien.bind("<KeyRelease>", on_amount_change)
+
+    # ==== GHI CHÚ ====
+    note_frame = tk.LabelFrame(main_frame, text="📝 Ghi chú", font=FONT_SUBTITLE,
+                               bg="#FFFFFF", fg="#333333", padx=15, pady=10)
+    note_frame.pack(fill=tk.X, pady=(0, 15))
+
+    entry_ghichu = tk.Entry(note_frame, font=FONT_NORMAL)
+    entry_ghichu.pack(fill=tk.X, padx=10, pady=5)
+
+    # ==== NÚT CHÍNH ====
+    btn_add = tk.Button(
+        main_frame,
+        text=button_text,
+        command=lambda: [them_chi_tieu(), add_window.destroy() if not editing_expense_id else None],
+        bg="#4FC3A1",
+        fg="white",
+        font=FONT_SUBTITLE,
+        relief=tk.FLAT,
+        cursor="hand2",
+        padx=15,
+        pady=10
+    )
+    btn_add.pack(pady=20, ipadx=10)
+
+    # ==== ĐIỀN DỮ LIỆU NẾU ĐANG SỬA ====
+    if expense_data:
+        ngay, danh_muc, so_tien, ghi_chu = expense_data
+
+        # Điền ngày
+        entry_ngay.set_date(datetime.strptime(ngay, "%Y-%m-%d"))
+
+        # Điền danh mục
+        if danh_muc in category_buttons:
+            select_category(danh_muc, category_buttons)
+
+        # Điền số tiền
+        entry_sotien.delete(0, tk.END)
+        entry_sotien.insert(0, format_currency(so_tien))
+
+        # Điền ghi chú
+        entry_ghichu.delete(0, tk.END)
+        if ghi_chu:
+            entry_ghichu.insert(0, ghi_chu)
+
+
+def show_view_expense_window():
+    """Hiển thị cửa sổ xem chi tiêu riêng biệt"""
+    global tree, filter_ngay, filter_thang, filter_nam
+
+    view_window = tk.Toplevel(root)
+    view_window.title("Xem chi tiêu")
+    view_window.geometry("1000x600")
+    view_window.configure(bg="#F5F5F5")
+    view_window.transient(root)
+    view_window.grab_set()
+
+    # Căn giữa cửa sổ
+    view_window.update_idletasks()
+    x = (view_window.winfo_screenwidth() // 2) - (1000 // 2)
+    y = (view_window.winfo_screenheight() // 2) - (600 // 2)
+    view_window.geometry(f"1000x600+{x}+{y}")
+
+    # Tiêu đề
+    tk.Label(view_window, text="📊 XEM CHI TIÊU", font=FONT_TITLE, bg="#F5F5F5", fg="#333333").pack(pady=(20, 20))
+
+    # Frame chính
+    main_frame = tk.Frame(view_window, bg="#F5F5F5")
+    main_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
+
+    # Frame lọc
+    frame_filter = tk.LabelFrame(main_frame, text="Lọc dữ liệu", font=FONT_SUBTITLE, bg="#FFFFFF",
+                                 fg="#333333", padx=15, pady=10)
+    frame_filter.pack(fill=tk.X, pady=(0, 15))
+
+    tk.Label(frame_filter, text="Ngày:", font=FONT_NORMAL, bg="#FFFFFF").grid(row=0, column=0, padx=5)
+    filter_ngay = DateEntry(frame_filter, date_pattern='yyyy-mm-dd', font=FONT_SMALL)
+    filter_ngay.grid(row=0, column=1, padx=5)
+    tk.Button(frame_filter, text="Lọc theo ngày",
+              command=lambda: hien_thi_du_lieu(filter_ngay.get_date().strftime("%Y-%m-%d")),
+              font=FONT_SMALL, bg="#B0E0E6", fg="#FFFFFF", relief=tk.FLAT).grid(row=0, column=2, padx=5)
+
+    tk.Label(frame_filter, text="Tháng:", font=FONT_NORMAL, bg="#FFFFFF").grid(row=0, column=3, padx=5)
+    filter_thang = ttk.Combobox(frame_filter, values=list(range(1, 13)), width=5, state="readonly",
+                                font=FONT_SMALL)
+    filter_thang.grid(row=0, column=4)
+    filter_thang.set(datetime.now().month)
+
+    tk.Label(frame_filter, text="Năm:", font=FONT_NORMAL, bg="#FFFFFF").grid(row=0, column=5, padx=5)
+    filter_nam = ttk.Combobox(frame_filter, values=list(range(2020, datetime.now().year + 1)), width=7,
+                              state="readonly", font=FONT_SMALL)
+    filter_nam.grid(row=0, column=6)
+    filter_nam.set(datetime.now().year)
+
+    tk.Button(frame_filter, text="Lọc theo tháng",
+              command=lambda: hien_thi_du_lieu(None, int(filter_thang.get()), int(filter_nam.get())),
+              font=FONT_SMALL, bg="#DDA0DD", fg="#FFFFFF", relief=tk.FLAT).grid(row=0, column=7, padx=5)
+    tk.Button(frame_filter, text="Lọc theo năm",
+              command=lambda: hien_thi_du_lieu(None, None, int(filter_nam.get())),
+              font=FONT_SMALL, bg="#F0E68C", fg="#333333", relief=tk.FLAT).grid(row=0, column=8, padx=5)
+    tk.Button(frame_filter, text="Hiển thị tất cả", command=hien_thi_du_lieu,
+              font=FONT_SMALL, bg="#98D8C8", fg="#FFFFFF", relief=tk.FLAT).grid(row=0, column=9, padx=5)
+
+    # Bảng hiển thị
+    frame_table = tk.Frame(main_frame, bg="#FFFFFF")
+    frame_table.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
+
+    tree = ttk.Treeview(frame_table, columns=("ID", "Ngày", "Danh mục", "Số tiền", "Ghi chú"), show="headings")
+    tree.heading("ID", text="ID")
+    tree.heading("Ngày", text="Ngày")
+    tree.heading("Danh mục", text="Danh mục")
+    tree.heading("Số tiền", text="Số tiền")
+    tree.heading("Ghi chú", text="Ghi chú")
+    tree.column("ID", width=50, anchor="center")
+    tree.column("Ngày", width=120, anchor="center")
+    tree.column("Danh mục", width=120)
+    tree.column("Số tiền", width=150, anchor="e")
+    tree.column("Ghi chú", width=300)
+    tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+    scrollbar = ttk.Scrollbar(frame_table, orient=tk.VERTICAL, command=tree.yview)
+    tree.configure(yscrollcommand=scrollbar.set)
+    scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+    # Nút chức năng
+    btn_frame = tk.Frame(main_frame, bg="#F5F5F5")
+    btn_frame.pack(fill=tk.X)
+
+    # Frame chứa 2 nút
+    button_container = tk.Frame(btn_frame, bg="#F5F5F5")
+    button_container.pack(pady=10)
+
+    # Nút sửa
+    btn_edit = tk.Button(button_container, text="✏️ Sửa chi tiêu đã chọn", command=sua_chi_tieu,
+                         font=FONT_SUBTITLE, bg="#4FC3A1", fg="#FFFFFF", relief=tk.FLAT, padx=20, pady=10)
+    btn_edit.pack(side=tk.LEFT, padx=10)
+
+    # Nút xóa
+    btn_delete = tk.Button(button_container, text="🗑️ Xóa chi tiêu đã chọn", command=xoa_chi_tieu,
+                           font=FONT_SUBTITLE, bg="#FFB6C1", fg="#FFFFFF", relief=tk.FLAT, padx=20, pady=10)
+    btn_delete.pack(side=tk.LEFT, padx=10)
+
+    # Hiển thị dữ liệu ban đầu
+    hien_thi_du_lieu()
