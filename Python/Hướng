@@ -1,7 +1,7 @@
 
 def chatbot_tu_van():
     chatbot_window = tk.Toplevel(root)
-    chatbot_window.title("AI Financial Advisor - Trợ lý tài chính thông minh")
+    chatbot_window.title("Financial Advisor - Trợ lý tài chính")
     chatbot_window.geometry("600x700")
     chatbot_window.configure(bg="#F0F8FF")
     chatbot_window.transient(root)
@@ -18,7 +18,7 @@ def chatbot_tu_van():
     header_frame.pack(fill=tk.X)
     header_frame.pack_propagate(False)
 
-    tk.Label(header_frame, text="🤖 TRỢ LÝ TÀI CHÍNH AI THÔNG MINH",
+    tk.Label(header_frame, text="🤖 TRỢ LÝ TÀI CHÍNH",
              font=("Segoe UI", 16, "bold"), bg="#4FC3A1", fg="white").pack(pady=20)
 
     # Hiển thị tin nhắn
@@ -53,7 +53,7 @@ def chatbot_tu_van():
         message_frame.pack(fill=tk.X, pady=5)
 
         if is_user:
-            # Tin nhắn người dùng (bên phải)
+            # Tin nhắn người dùng
             msg_label = tk.Label(message_frame, text=message,
                                  font=FONT_NORMAL, bg="#DCF8C6",
                                  fg="#333333", justify=tk.LEFT,
@@ -85,7 +85,7 @@ def chatbot_tu_van():
         add_message("user", message, is_user=True)
         entry_msg.delete(0, tk.END)
 
-        # Xử lý và trả lời với AI thực sự
+        # Xử lý và trả lời
         response = process_with_ai(message)
         add_message("bot", response, is_user=False)
 
@@ -95,23 +95,29 @@ def chatbot_tu_van():
         response = process_with_ai(question)
         add_message("bot", response, is_user=False)
 
-    # ========== AI THỰC SỰ VỚI MACHINE LEARNING ==========
+    # ========== MACHINE LEARNING ==========
 
     def get_user_spending_data():
         """Lấy dữ liệu chi tiêu của user để phân tích"""
         try:
             conn = get_connection()
+            cursor = conn.cursor()
+
             query = """
                 SELECT Ngay, Danh_muc, So_tien, Ghi_chu 
                 FROM ChiTieu 
                 WHERE UserID = %s 
                 ORDER BY Ngay
             """
-            df = pd.read_sql(query, conn, params=[current_user_id])
+            cursor.execute(query, (current_user_id,))
+            rows = cursor.fetchall()
             conn.close()
 
-            if df.empty:
+            if not rows:
                 return None
+
+            # Chuyển đổi thành DataFrame thủ công
+            df = pd.DataFrame(rows, columns=['Ngay', 'Danh_muc', 'So_tien', 'Ghi_chu'])
 
             # Chuyển đổi kiểu dữ liệu
             df['Ngay'] = pd.to_datetime(df['Ngay'])
@@ -122,7 +128,6 @@ def chatbot_tu_van():
 
             return df
         except Exception as e:
-            print(f"Lỗi khi lấy dữ liệu: {e}")
             return None
 
     def predict_future_spending():
@@ -147,7 +152,7 @@ def chatbot_tu_van():
             future_months = [[len(monthly_data)], [len(monthly_data) + 1], [len(monthly_data) + 2]]
             predictions = model.predict(future_months)
 
-            response = "🔮 **DỰ ĐOÁN CHI TIÊU 3 THÁNG TỚI:**\n\n"
+            response = "🔮 DỰ ĐOÁN CHI TIÊU 3 THÁNG TỚI:\n\n"
             months = ["Tháng sau", "2 tháng tới", "3 tháng tới"]
 
             for i, (month, pred) in enumerate(zip(months, predictions)):
@@ -189,7 +194,7 @@ def chatbot_tu_van():
                 return "🤔 Bạn chưa có chi tiêu nào để phân tích. Hãy bắt đầu thêm chi tiêu!"
 
             total_all = sum(float(row[1]) for row in categories)
-            response = "📊 **PHÂN TÍCH CHI TIÊU CỦA BẠN:**\n\n"
+            response = "📊 PHÂN TÍCH CHI TIÊU CỦA BẠN:\n\n"
 
             for category, total, count in categories:
                 percentage = (float(total) / total_all) * 100
@@ -198,7 +203,7 @@ def chatbot_tu_van():
 
             # Tìm danh mục chi nhiều nhất
             top_category = categories[0]
-            response += f"\n💡 **NHẬN XÉT:** Bạn chi nhiều nhất cho {top_category[0]} ({format_currency(top_category[1])})"
+            response += f"\n💡 NHẬN XÉT: Bạn chi nhiều nhất cho {top_category[0]} ({format_currency(top_category[1])})"
 
             return response
 
@@ -222,7 +227,7 @@ def chatbot_tu_van():
             df['Cluster'] = kmeans.fit_predict(features_scaled)
 
             # Phân tích các cụm
-            response = "🎯 **PHÂN TÍCH MẪU CHI TIÊU (AI):**\n\n"
+            response = "🎯 PHÂN TÍCH MẪU CHI TIÊU:\n\n"
 
             for cluster_idx in df['Cluster'].unique():
                 cluster_data = df[df['Cluster'] == cluster_idx]
@@ -233,7 +238,7 @@ def chatbot_tu_van():
 
                 day_names = ["Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7", "Chủ nhật"]
 
-                response += f"**Nhóm {cluster_idx + 1}:**\n"
+                response += f"Nhóm {cluster_idx + 1}:**\n"
                 response += f"• Số tiền TB: {format_currency(avg_amount)}\n"
                 response += f"• Danh mục chính: {common_category}\n"
                 response += f"• Ngày hay chi: {day_names[common_day]}\n"
@@ -246,7 +251,7 @@ def chatbot_tu_van():
                 insight_category = largest_data['Danh_muc'].mode()[0]
                 insight_amount = largest_data['So_tien'].mean()
 
-                response += f"💡 **INSIGHT:** Bạn thường chi {format_currency(insight_amount)} cho {insight_category}"
+                response += f"💡 INSIGHT: Bạn thường chi {format_currency(insight_amount)} cho {insight_category}"
 
             return response
 
@@ -273,7 +278,7 @@ def chatbot_tu_van():
             if anomalies.empty:
                 return "✅ Không có chi tiêu bất thường nào được phát hiện!"
 
-            response = "🚨 **CHI TIÊU BẤT THƯỜNG (AI):**\n\n"
+            response = "🚨 CHI TIÊU BẤT THƯỜNG:\n\n"
 
             for _, anomaly in anomalies.head(3).iterrows():
                 z_score = anomaly['Z_score']
@@ -297,7 +302,7 @@ def chatbot_tu_van():
             category_stats = df.groupby('Danh_muc')['So_tien'].agg(['mean', 'count', 'std']).reset_index()
             total_mean = df['So_tien'].mean()
 
-            response = "💰 **ĐỀ XUẤT NGÂN SÁCH TỐI ƯU:**\n\n"
+            response = "💰 ĐỀ XUẤT NGÂN SÁCH TỐI ƯU:\n\n"
 
             for _, category in category_stats.iterrows():
                 current_avg = category['mean']
@@ -308,7 +313,7 @@ def chatbot_tu_van():
                     response += f"• {category['Danh_muc']}: {format_currency(optimal)} (tiết kiệm {format_currency(savings)})\n"
 
             monthly_saving = (category_stats['mean'].sum() * 0.1)  # Tổng tiết kiệm 10%
-            response += f"\n🎯 **Tổng tiết kiệm hàng tháng:** {format_currency(monthly_saving)}"
+            response += f"\n🎯 Tổng tiết kiệm hàng tháng: {format_currency(monthly_saving)}"
 
             return response
 
@@ -374,10 +379,10 @@ def chatbot_tu_van():
 
         if df is not None and len(df) > 10:
             suggestions = [
-                "Tôi có thể **dự đoán** chi tiêu tương lai của bạn dựa trên dữ liệu hiện có!",
-                "Muốn tôi **phân tích** các mẫu chi tiêu ẩn trong dữ liệu của bạn?",
-                "Tôi có thể phát hiện **chi tiêu bất thường** mà bạn có thể chưa nhận ra!",
-                "Để tôi **đề xuất ngân sách tối ưu** dựa trên thói quen chi tiêu của bạn!"
+                "Tôi có thể dự đoán chi tiêu tương lai của bạn dựa trên dữ liệu hiện có!",
+                "Muốn tôi phân tích các mẫu chi tiêu ẩn trong dữ liệu của bạn?",
+                "Tôi có thể phát hiện chi tiêu bất thường mà bạn có thể chưa nhận ra!",
+                "Để tôi đề xuất ngân sách tối ưu dựa trên thói quen chi tiêu của bạn!"
             ]
         else:
             suggestions = [
@@ -424,19 +429,17 @@ def chatbot_tu_van():
     scrollbar.pack(side="right", fill="y")
 
     # Tin nhắn chào mừng với AI
-    welcome_msg = """🤖 **TRỢ LÝ TÀI CHÍNH AI THÔNG MINH**
+    welcome_msg = """🤖 TRỢ LÝ TÀI CHÍNH 
 
 Tôi sử dụng Machine Learning để:
-• 🔮 **Dự đoán** chi tiêu tương lai
-• 🎯 **Phân tích mẫu** chi tiêu ẩn  
-• 🚨 **Phát hiện bất thường** tự động
-• 💰 **Đề xuất ngân sách** tối ưu
+• 🔮 Dự đoán chi tiêu tương lai
+• 🎯 Phân tích mẫu chi tiêu ẩn  
+• 🚨 Phát hiện bất thường tự động
+• 💰 Đề xuất ngân sách tối ưu
 
-Hãy thử các tính năng AI bằng cách nhập câu hỏi hoặc sử dụng nút bên dưới!"""
+Hãy thử các tính năng bằng cách nhập câu hỏi hoặc sử dụng nút bên dưới!"""
 
     add_message("bot", welcome_msg, is_user=False)
-
-    # Focus vào ô nhập
     entry_msg.focus()
 
     return chatbot_window
